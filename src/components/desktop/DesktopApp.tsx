@@ -22,6 +22,7 @@ import { SettingsModal } from '../settings/SettingsModal';
 import { CameraCaptureModal } from '../camera/CameraCaptureModal';
 import { UserProfile } from '@/types';
 import { useChat } from '@/hooks/useChat';
+import { SubjectSelect } from '../SubjectSelect';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 import { useGSAP } from '@gsap/react';
@@ -66,6 +67,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     activeThread,
     messages,
     isGenerating,
+    subjectId,
+    setSubjectId,
     sendMessage,
     clearAllChats,
     reloadFromStorage,
@@ -641,6 +644,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
             ) : (
               /* Normal input with Upload Photo + Capture Photo */
               <div className="flex items-center gap-2 rounded-full border border-white/12 bg-[#1a1c28]/95 p-2 pl-3 shadow-2xl focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/15 transition-all">
+                <SubjectSelect value={subjectId} onChange={setSubjectId} disabled={isGenerating} />
+
                 {/* Upload Photo from file */}
                 <button
                   type="button"

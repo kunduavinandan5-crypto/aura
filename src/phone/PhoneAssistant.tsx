@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { PhoneOrb } from './PhoneOrb';
+import { SubjectSelect } from '../components/SubjectSelect';
 import { CameraCaptureModal } from '../components/camera/CameraCaptureModal';
 import { Message, UserProfile } from '@/types';
 import ReactMarkdown from 'react-markdown';
@@ -24,6 +25,8 @@ interface PhoneAssistantProps {
   messages: Message[];
   isGenerating: boolean;
   onSendMessage: (text: string, image?: string) => void;
+  subjectId: string;
+  onSubjectChange: (subjectId: string) => void;
   onOpenVoiceMode?: () => void;
   onOpenDrawer: () => void;
 }
@@ -58,6 +61,8 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   messages,
   isGenerating,
   onSendMessage,
+  subjectId,
+  onSubjectChange,
   onOpenDrawer,
 }) => {
   const [input, setInput] = useState('');
@@ -396,6 +401,12 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
             >
               <X className="h-3.5 w-3.5" />
             </button>
+          </div>
+        )}
+
+        {!isVoiceActive && (
+          <div className="mb-2 flex">
+            <SubjectSelect value={subjectId} onChange={onSubjectChange} disabled={isGenerating} />
           </div>
         )}
 

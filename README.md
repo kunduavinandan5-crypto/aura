@@ -28,7 +28,7 @@ Without Supabase variables the app runs in local-only mode (profile and chats st
 
 ## AI backend contract
 
-`POST VITE_RAG_API_URL` with `{ query, prompt, question, system, image?, history[] }`. The reply may be a string or an object with `response | answer | content | output | text` (or OpenAI/Gemini shapes), plus optional `sources[]`.
+`POST VITE_RAG_API_URL` with `{ query, prompt, question, subject, subject_label, system, image?, history[] }`. `subject` is the id picked in the dropdown (see [src/lib/subjects.ts](src/lib/subjects.ts): `general`, `accountancy`, `economics`, `business-studies`, `mathematics`, `physics`, `chemistry`, `biology`, `english`, `computer-science`); route it to the matching RAG model/collection on your backend. The reply may be a string or an object with `response | answer | content | output | text` (or OpenAI/Gemini shapes), plus optional `sources[]`.
 
 ## Scripts
 

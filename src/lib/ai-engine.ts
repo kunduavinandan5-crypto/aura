@@ -1,5 +1,6 @@
 import { Message, RagSourceChunk } from '@/types';
 import { supabase } from './supabase';
+import { Subject } from './subjects';
 
 /**
  * All model calls go through the RAG backend (VITE_RAG_API_URL). Provider API keys
@@ -27,14 +28,16 @@ export async function generateAiResponse(params: {
   image?: string; // base64 data URL
   history?: Message[];
   studentClass?: string;
-  subject?: string;
+  /** Subject chosen in the UI; the backend routes to the matching RAG model/collection by `subject` id. */
+  subject: Subject;
 }): Promise<AiResult> {
   if (!RAG_ENDPOINT) {
     throw new Error('The AI service is not configured. Set VITE_RAG_API_URL for this deployment.');
   }
 
   const { prompt, image, history = [], studentClass, subject } = params;
-  const profileHint = studentClass ? ` Student: ${studentClass}${subject ? `, ${subject}` : ''}.` : '';
+  const profileHint =
+    ` Subject: ${subject.label}.` + (studentClass ? ` Student: ${studentClass}.` : '');
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = (await supabase?.auth.getSession())?.data.session?.access_token;
@@ -53,6 +56,8 @@ export async function generateAiResponse(params: {
         query: prompt,
         prompt,
         question: prompt,
+        subject: subject.id,
+        subject_label: subject.label,
         system: SYSTEM_PROMPT + profileHint,
         image,
         history: history.slice(-6).map(({ role, content }) => ({ role, content })),

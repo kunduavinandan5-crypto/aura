@@ -4,6 +4,7 @@ import { Message, Thread, UserProfile } from '@/types';
 import { storage } from '@/lib/storage';
 import { generateAiResponse } from '@/lib/ai-engine';
 import { newId } from '@/lib/id';
+import { getSubject, loadSubjectId, saveSubjectId } from '@/lib/subjects';
 
 const FALLBACK_REPLY =
   "Sorry, I couldn't get an answer just now. Please check your connection and try again.";
@@ -13,6 +14,13 @@ export function useChat(user: UserProfile) {
   const [threads, setThreads] = useState<Thread[]>(() => storage.getThreads());
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [subjectId, setSubjectIdState] = useState(loadSubjectId);
+
+  const setSubjectId = useCallback((id: string) => {
+    const next = getSubject(id).id;
+    setSubjectIdState(next);
+    saveSubjectId(next);
+  }, []);
 
   const threadsRef = useRef(threads);
   const busyRef = useRef(false);
@@ -35,7 +43,8 @@ export function useChat(user: UserProfile) {
       if (!prompt || busyRef.current) return null;
       busyRef.current = true;
 
-      storage.recordSearch(prompt, user.id, user.subject || 'General');
+      const subject = getSubject(subjectId);
+      storage.recordSearch(prompt, user.id, subject.label);
 
       const now = new Date().toISOString();
       const userMessage: Message = { id: newId('msg'), role: 'user', content: prompt, imageUrl: image, createdAt: now };
@@ -69,7 +78,7 @@ export function useChat(user: UserProfile) {
           image,
           history,
           studentClass: user.studentClass,
-          subject: user.subject,
+          subject,
         });
         patchThread(targetId, (t) => ({
           ...t,
@@ -92,7 +101,7 @@ export function useChat(user: UserProfile) {
         setIsGenerating(false);
       }
     },
-    [activeThreadId, user.id, user.subject, user.studentClass]
+    [activeThreadId, user.id, user.studentClass, subjectId]
   );
 
   const startNewChat = useCallback(() => setActiveThreadId(null), []);
@@ -112,6 +121,8 @@ export function useChat(user: UserProfile) {
     messages,
     activeThread,
     isGenerating,
+    subjectId,
+    setSubjectId,
     sendMessage,
     startNewChat,
     clearAllChats,
