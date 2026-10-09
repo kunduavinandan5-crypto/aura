@@ -112,6 +112,17 @@ export function useChat(user: UserProfile) {
 
   const startNewChat = useCallback(() => setActiveThreadId(null), []);
 
+  /** Deletes one conversation from this device and from the database. */
+  const deleteThread = useCallback(
+    async (threadId: string) => {
+      setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      if (activeThreadId === threadId) setActiveThreadId(null);
+      await storage.deleteThread(threadId);
+      toast.success('Conversation deleted');
+    },
+    [activeThreadId]
+  );
+
   const clearAllChats = useCallback(async () => {
     await storage.clearAllUserData(user.id);
     setThreads([]);
@@ -131,6 +142,7 @@ export function useChat(user: UserProfile) {
     setSubjectId,
     sendMessage,
     startNewChat,
+    deleteThread,
     clearAllChats,
     reloadFromStorage,
   };

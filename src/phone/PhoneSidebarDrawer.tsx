@@ -5,6 +5,7 @@ import {
   Plus,
   Settings,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
 import { Thread, UserProfile } from '@/types';
@@ -17,6 +18,7 @@ interface PhoneSidebarDrawerProps {
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
   onNewChat: () => void;
+  onDeleteThread: (id: string) => void;
   onOpenSettings: () => void;
   onSignOut: () => void;
 }
@@ -29,6 +31,7 @@ export const PhoneSidebarDrawer: React.FC<PhoneSidebarDrawerProps> = ({
   activeThreadId,
   onSelectThread,
   onNewChat,
+  onDeleteThread,
   onOpenSettings,
   onSignOut,
 }) => {
@@ -86,21 +89,31 @@ export const PhoneSidebarDrawer: React.FC<PhoneSidebarDrawerProps> = ({
                 </div>
               ) : (
                 threads.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      onSelectThread(t.id);
-                      onClose();
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs truncate transition-colors ${
-                      activeThreadId === t.id
-                        ? 'bg-purple-600/20 text-purple-300 font-medium'
-                        : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    <MessageSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                    <span className="truncate">{t.title}</span>
-                  </button>
+                  <div key={t.id} className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        onSelectThread(t.id);
+                        onClose();
+                      }}
+                      className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs truncate transition-colors ${
+                        activeThreadId === t.id
+                          ? 'bg-purple-600/20 text-purple-300 font-medium'
+                          : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                      <span className="truncate">{t.title}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Delete "${t.title}"? This cannot be undone.`)) onDeleteThread(t.id);
+                      }}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 active:bg-red-500/15 active:text-red-400"
+                      aria-label={`Delete conversation ${t.title}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>

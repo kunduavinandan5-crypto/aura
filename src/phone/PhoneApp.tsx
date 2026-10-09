@@ -56,6 +56,7 @@ export const PhoneApp: React.FC<PhoneAppProps> = ({ user, onSignOut, onUpdateUse
         activeThreadId={chat.activeThreadId}
         onSelectThread={chat.setActiveThreadId}
         onNewChat={chat.startNewChat}
+        onDeleteThread={(id) => void chat.deleteThread(id)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onSignOut={onSignOut}
       />

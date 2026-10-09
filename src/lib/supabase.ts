@@ -246,6 +246,19 @@ export async function fetchRemoteThreads(userId: string): Promise<Thread[] | nul
   }));
 }
 
+/**
+ * Delete one conversation (its messages cascade). Resolves true when there is nothing to delete remotely
+ * (no cloud session) or the delete succeeded; false means it should be retried later.
+ */
+export async function deleteRemoteThread(threadId: string): Promise<boolean> {
+  if (!supabase) return true;
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return true;
+  const { error } = await supabase.from('threads').delete().eq('id', threadId);
+  if (error) console.warn('Supabase deleteRemoteThread error:', error.message);
+  return !error;
+}
+
 /** Delete all of the signed-in user's chats (messages cascade) and search history. */
 export async function deleteRemoteUserData(userId: string): Promise<boolean> {
   if (!supabase || !userId) return false;

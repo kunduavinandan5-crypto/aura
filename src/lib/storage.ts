@@ -1,6 +1,7 @@
 import { Thread, UserProfile, UserSearchRecord } from '@/types';
 import { newId } from './id';
 import {
+  deleteRemoteThread,
   deleteRemoteUserData,
   fetchRemoteThreads,
   fetchUserSearches,
@@ -12,9 +13,12 @@ import {
 const THREADS_KEY = 'aura_chat_threads_v2';
 const SEARCHES_KEY = 'aura_user_searches_v2';
 const USER_KEY = 'aura_user_profile_v2';
+/** Conversation ids deleted locally whose cloud delete has not succeeded yet (e.g. offline). */
+const PENDING_DELETES_KEY = 'aura_pending_thread_deletes_v1';
 
 /** Keys written by older builds; wiped on sign-out so no student data lingers on shared devices. */
 const LEGACY_KEYS = [
+  'aura_pending_thread_deletes_v1',
   'aura_subject_v1',
   'aura_subject_v2',
   'aura_chat_threads_v1',
@@ -93,6 +97,23 @@ export const storage = {
     return read<UserSearchRecord[]>(SEARCHES_KEY, []);
   },
 
+  /** Delete one conversation locally (caller updates state) and in the cloud, retrying later if offline. */
+  async deleteThread(threadId: string): Promise<void> {
+    write(THREADS_KEY, this.getThreads().filter((t) => t.id !== threadId));
+    const ok = await deleteRemoteThread(threadId).catch(() => false);
+    if (!ok) write(PENDING_DELETES_KEY, [...new Set([...read<string[]>(PENDING_DELETES_KEY, []), threadId])]);
+  },
+
+  async flushPendingDeletes(): Promise<void> {
+    const pending = read<string[]>(PENDING_DELETES_KEY, []);
+    if (!pending.length) return;
+    const stillPending: string[] = [];
+    for (const id of pending) {
+      if (!(await deleteRemoteThread(id).catch(() => false))) stillPending.push(id);
+    }
+    write(PENDING_DELETES_KEY, stillPending);
+  },
+
   /** Delete chat history and search records locally and in the cloud. */
   async clearAllUserData(userId?: string): Promise<void> {
     clearTimeout(syncTimer);
@@ -109,12 +130,23 @@ export const storage = {
 
   /** Pull chats and searches from Supabase down to local state. */
   async syncFromSupabase(userId: string): Promise<{ threads: number; searches: number }> {
+    await this.flushPendingDeletes();
     const [remoteThreads, remoteSearches] = await Promise.all([
       fetchRemoteThreads(userId),
       fetchUserSearches(userId),
     ]);
-    if (remoteThreads?.length) write(THREADS_KEY, remoteThreads);
+
+    // Merge by id (newest copy wins) so unsynced local chats are never lost; skip chats awaiting deletion.
+    const pending = new Set(read<string[]>(PENDING_DELETES_KEY, []));
+    const merged = new Map<string, Thread>();
+    for (const t of [...this.getThreads(), ...(remoteThreads ?? [])]) {
+      if (pending.has(t.id)) continue;
+      const existing = merged.get(t.id);
+      if (!existing || t.updatedAt > existing.updatedAt) merged.set(t.id, t);
+    }
+    const threads = [...merged.values()].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+    if (threads.length) write(THREADS_KEY, threads);
     if (remoteSearches.length) write(SEARCHES_KEY, remoteSearches);
-    return { threads: remoteThreads?.length ?? 0, searches: remoteSearches.length };
+    return { threads: threads.length, searches: remoteSearches.length };
   },
 };

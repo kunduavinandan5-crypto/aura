@@ -70,6 +70,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     subjectId,
     setSubjectId,
     sendMessage,
+    deleteThread,
     clearAllChats,
     reloadFromStorage,
   } = useChat(user);
@@ -434,18 +435,29 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                 </div>
               ) : (
                 threads.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setActiveThreadId(t.id)}
-                    className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs transition-all ${
-                      activeThreadId === t.id
-                        ? 'bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30'
-                        : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    <MessageSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                    <span className="truncate">{t.title}</span>
-                  </button>
+                  <div key={t.id} className="group relative">
+                    <button
+                      onClick={() => setActiveThreadId(t.id)}
+                      className={`flex w-full items-center gap-2.5 rounded-xl py-2 pl-3 pr-9 text-left text-xs transition-all ${
+                        activeThreadId === t.id
+                          ? 'bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30'
+                          : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                      <span className="truncate">{t.title}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Delete "${t.title}"? This cannot be undone.`)) void deleteThread(t.id);
+                      }}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 opacity-0 transition-all hover:bg-red-500/15 hover:text-red-400 focus:opacity-100 group-hover:opacity-100"
+                      title="Delete conversation"
+                      aria-label={`Delete conversation ${t.title}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>
