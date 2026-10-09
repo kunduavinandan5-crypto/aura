@@ -8,12 +8,21 @@ interface SubjectSelectProps {
   onChange: (subjectId: string) => void;
   disabled?: boolean;
   className?: string;
+  /** 'chip' (default) for the input bar; 'header' renders "Aura <subject> v" as a top-bar title. */
+  variant?: 'chip' | 'header';
 }
 
 const MENU_HEIGHT = 120; // px of space needed to open downwards
 
 /** Custom listbox dropdown: keyboard accessible, flips upward near the bottom edge, highlights until chosen. */
-export const SubjectSelect: React.FC<SubjectSelectProps> = ({ value, onChange, disabled, className = '' }) => {
+export const SubjectSelect: React.FC<SubjectSelectProps> = ({
+  value,
+  onChange,
+  disabled,
+  className = '',
+  variant = 'chip',
+}) => {
+  const isHeader = variant === 'header';
   const [open, setOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
   const [active, setActive] = useState(0);
@@ -101,14 +110,29 @@ export const SubjectSelect: React.FC<SubjectSelectProps> = ({ value, onChange, d
         aria-expanded={open}
         aria-controls={listId}
         aria-label={`Subject${selected ? `: ${selected.label}` : ' (required)'}`}
-        className={`flex items-center gap-2 rounded-full border py-1.5 pr-2.5 pl-3 text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 disabled:cursor-not-allowed disabled:opacity-60 ${
-          selected
-            ? 'border-blue-400/30 bg-blue-500/10 text-blue-100 hover:bg-blue-500/20'
-            : 'border-amber-400/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20'
-        }`}
+        className={
+          isHeader
+            ? 'flex items-center gap-1.5 rounded-full px-3 py-2 text-base transition-colors hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 disabled:cursor-not-allowed disabled:opacity-60'
+            : `flex items-center gap-2 rounded-full border py-1.5 pr-2.5 pl-3 text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 disabled:cursor-not-allowed disabled:opacity-60 ${
+                selected
+                  ? 'border-blue-400/30 bg-blue-500/10 text-blue-100 hover:bg-blue-500/20'
+                  : 'border-amber-400/50 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20'
+              }`
+        }
       >
-        <BookOpen className={`h-3.5 w-3.5 ${selected ? 'text-blue-300' : 'text-amber-300'}`} aria-hidden="true" />
-        <span className="whitespace-nowrap">{selected ? selected.label : 'Select subject'}</span>
+        {isHeader ? (
+          <>
+            <span className="font-semibold text-white">Aura</span>
+            <span className={`whitespace-nowrap ${selected ? 'text-zinc-400' : 'text-amber-300'}`}>
+              {selected ? selected.label : 'Select subject'}
+            </span>
+          </>
+        ) : (
+          <>
+            <BookOpen className={`h-3.5 w-3.5 ${selected ? 'text-blue-300' : 'text-amber-300'}`} aria-hidden="true" />
+            <span className="whitespace-nowrap">{selected ? selected.label : 'Select subject'}</span>
+          </>
+        )}
         <ChevronDown
           className={`h-3.5 w-3.5 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           aria-hidden="true"

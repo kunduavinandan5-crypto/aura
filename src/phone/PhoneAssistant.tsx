@@ -221,10 +221,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           <Menu className="h-5 w-5" />
         </button>
 
-        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 backdrop-blur-md">
-          <span className="text-xs font-bold text-white">Aura</span>
-          <span className="text-[10px] text-zinc-400">· AI Assistant</span>
-        </div>
+        <SubjectSelect variant="header" value={subjectId} onChange={onSubjectChange} disabled={isGenerating} />
 
         <button
           onClick={() => {
@@ -468,8 +465,6 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
             >
               <ImageIcon className="h-4 w-4" />
             </button>
-
-            <SubjectSelect value={subjectId} onChange={onSubjectChange} disabled={isGenerating} />
 
             <input
               type="text"
