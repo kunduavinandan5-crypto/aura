@@ -22,6 +22,22 @@ body,
   inset: 0;
 }
 
+/* Stop mobile browsers from zooming the page: no double-tap zoom, no font inflation. */
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* iOS/Android auto-zoom into any focused field whose font is under 16px; keep fields at 16px on touch screens. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 4px;
