@@ -213,7 +213,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       />
 
       {/* ── Top Header ── */}
-      <header className="flex h-16 w-full shrink-0 items-center justify-between px-5 pt-2 z-10">
+      <header className="relative flex h-16 w-full shrink-0 items-center justify-between px-5 pt-2 z-30">
         <button
           onClick={onOpenDrawer}
           className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 backdrop-blur-md transition-all active:scale-95"
