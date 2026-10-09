@@ -107,12 +107,25 @@ function seoPlugin(siteUrl: string): Plugin {
   };
 }
 
+/** Stamps dist/sw.js with a per-deploy id (Vercel commit SHA when available) so PWA updates are detected. */
+function swVersionPlugin(): Plugin {
+  return {
+    name: 'aura-sw-version',
+    writeBundle(options) {
+      const swPath = path.join(options.dir || 'dist', 'sw.js');
+      if (!fs.existsSync(swPath)) return;
+      const buildId = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 12) || Date.now().toString(36);
+      fs.writeFileSync(swPath, fs.readFileSync(swPath, 'utf8').replace(/__BUILD_ID__/g, buildId));
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const siteUrl = (env.VITE_SITE_URL || '').trim().replace(/\/+$/, '');
 
   return {
-    plugins: [react(), tailwindcss(), seoPlugin(siteUrl)],
+    plugins: [react(), tailwindcss(), seoPlugin(siteUrl), swVersionPlugin()],
     resolve: { alias: { '@': path.resolve(__dirname, './src') } },
     server: { port: 5173, host: true },
     build: {

@@ -2,7 +2,9 @@
 // - Pages: network-first (a new deploy is never hidden behind a stale index.html), cached copy only when offline.
 // - Same-origin static assets: stale-while-revalidate (Vite fingerprints filenames).
 // - Everything cross-origin (Supabase, AI backend, fonts) and all non-GET requests bypass the worker.
-const CACHE_NAME = 'aura-pwa-v2';
+// __BUILD_ID__ is replaced at build time, so every deploy ships a byte-different worker and
+// browsers detect the update and drop old caches.
+const CACHE_NAME = 'aura-pwa-__BUILD_ID__';
 const PRECACHE = ['/', '/manifest.json', '/icon.svg', '/favicon.ico'];
 
 self.addEventListener('install', (event) => {
