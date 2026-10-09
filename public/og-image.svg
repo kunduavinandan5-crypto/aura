@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Aura AI Study Assistant">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5942e8"/>
+      <stop offset="1" stop-color="#c026d3"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#07080e"/>
+  <circle cx="930" cy="315" r="200" fill="url(#g)" opacity="0.9"/>
+  <path d="M930 185l34 106 106 34-106 34-34 106-34-106-106-34 106-34z" fill="#fff"/>
+  <text x="80" y="290" fill="#ffffff" font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="84" font-weight="700">Aura</text>
+  <text x="80" y="370" fill="#c4c8d8" font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="40">AI study assistant for students</text>
+  <text x="80" y="430" fill="#8f96a8" font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="30">Text · Photo · Voice</text>
+</svg>

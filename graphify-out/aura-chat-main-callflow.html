@@ -1,0 +1,1981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>aura-chat-main — Complete Call Flow &amp; Architecture Documentation</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg: #0f172a; --surface: #1e293b; --border: #334155;
+  --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+  --warn: #fbbf24; --err: #f87171; --ok: #34d399;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+.container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+h1 { font-size: 2.4rem; margin-bottom: 8px; background: linear-gradient(135deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+h2 { font-size: 1.7rem; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+h3 { font-size: 1.25rem; margin: 32px 0 12px; color: var(--accent); }
+h4 { font-size: 1.05rem; margin: 20px 0 8px; color: var(--warn); }
+p { margin: 8px 0; color: var(--muted); }
+.subtitle { color: var(--muted); font-size: 1.1rem; margin-bottom: 32px; }
+.mermaid { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin: 20px 0; overflow-x: auto; position: relative; }
+.mermaid.is-enhanced { padding: 0; overflow: hidden; min-height: 260px; }
+.mermaid-viewport { padding: 54px 24px 24px; overflow: hidden; cursor: grab; touch-action: none; min-height: 260px; }
+.mermaid-viewport.is-dragging { cursor: grabbing; }
+.mermaid-viewport svg { max-width: none !important; height: auto; transform-origin: 0 0; transition: transform 120ms ease; }
+.mermaid-toolbar { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px; background: rgba(15,23,42,0.92); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+.mermaid-toolbar button, .mermaid-toolbar .zoom-level { height: 28px; min-width: 32px; border: 1px solid var(--border); border-radius: 6px; background: #1e293b; color: var(--text); font: 600 0.78rem system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; }
+.mermaid-toolbar button { cursor: pointer; }
+.mermaid-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+.mermaid-toolbar .zoom-level { min-width: 52px; color: var(--muted); background: transparent; }
+.call-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92rem; }
+.call-table th { background: #1a2744; color: var(--accent); text-align: left; padding: 10px 14px; border: 1px solid var(--border); }
+.call-table td { padding: 8px 14px; border: 1px solid var(--border); vertical-align: top; }
+.call-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.tag-async { background: #7c3aed33; color: #a78bfa; }
+.tag-class { background: #05966933; color: var(--ok); }
+.tag-func { background: #2563eb33; color: var(--accent); }
+.tag-cmd { background: #d9770633; color: var(--warn); }
+.tag-endpoint { background: #dc262633; color: var(--err); }
+.tag-hook { background: #db277733; color: #f472b6; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 16px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin: 16px 0; }
+.arrow-chain { font-family: 'Fira Code', monospace; font-size: 0.85rem; color: var(--accent); padding: 10px; background: rgba(56,189,248,0.06); border-radius: 6px; }
+code { font-family: 'Fira Code', 'Cascadia Code', monospace; background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 3px; font-size: 0.88em; }
+ul, ol { margin: 8px 0 8px 24px; color: var(--muted); }
+li { margin: 4px 0; }
+a { color: var(--accent); }
+hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+.nav { position: sticky; top: 0; background: var(--bg); z-index: 10; padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.9rem; }
+.nav a { text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+@media (max-width: 768px) { .container { padding: 16px; } h1 { font-size: 1.8rem; } }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>aura-chat-main — Complete Call Flow &amp; Architecture Documentation</h1>
+<p class="subtitle">Generated from graphify knowledge graph: 177 nodes, 361 edges, 12 communities. Commit: unknown</p>
+
+<div class="nav">
+    <a href="#overview">Architecture Overview</a>
+    <a href="#build-graph">Graph Build</a>
+    <a href="#ingest-cache-update">Ingestion &amp; Updates</a>
+    <a href="#supabasets-apptsx-storagets">Supabasets Apptsx Storagets</a>
+    <a href="#phone-indexts-settingsmodaltsx">Phone Indexts Settingsmodaltsx</a>
+    <a href="#enginets-rag-documentmanagermodaltsx">Enginets Rag Documentmanagermodaltsx</a>
+    <a href="#ref-eslint-plugin">Ref Eslint Plugin</a>
+    <a href="#errorboundarytsx-components-errorboundary">Errorboundarytsx Components Errorboundary</a>
+    <a href="#swjs-public-assets">Swjs Public Assets</a>
+</div>
+
+<!-- ====== Architecture Overview ====== -->
+<h2 id="overview">1. Architecture Overview</h2>
+
+<div class="mermaid">
+
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    BUILD_GRAPH_321CBB04("Graph Build<br/><small>85 nodes</small>")
+    class BUILD_GRAPH_321CBB04 module;
+    INGEST_CACHE_UPDATE_FF457338("Ingestion &amp; Updates<br/><small>10 nodes</small>")
+    class INGEST_CACHE_UPDATE_FF457338 module;
+    SUPABASETS_APPTSX_STORAGETS_29254D08("Supabasets Apptsx Storagets<br/><small>34 nodes</small>")
+    class SUPABASETS_APPTSX_STORAGETS_29254D08 module;
+    PHONE_INDEXTS_SETTINGSMODALTSX_94884C81("Phone Indexts Settingsmodaltsx<br/><small>18 nodes</small>")
+    class PHONE_INDEXTS_SETTINGSMODALTSX_94884C81 module;
+    ENGINETS_RAG_DOCUMENTMANAGERMODALTSX_FDD8C3AC("Enginets Rag Documentmanagermodaltsx<br/><small>15 nodes</small>")
+    class ENGINETS_RAG_DOCUMENTMANAGERMODALTSX_FDD8C3AC module;
+    REF_ESLINT_PLUGIN_9A8DE8D4("Ref Eslint Plugin<br/><small>7 nodes</small>")
+    class REF_ESLINT_PLUGIN_9A8DE8D4 module;
+    ERRORBOUNDARYTSX_COMPONENTS_ERRORBOUNDARY_4C49ADBE("Errorboundarytsx Components Errorboundary<br/><small>6 nodes</small>")
+    class ERRORBOUNDARYTSX_COMPONENTS_ERRORBOUNDARY_4C49ADBE module;
+    SWJS_PUBLIC_ASSETS_EE2CB4E8("Swjs Public Assets<br/><small>2 nodes</small>")
+    class SWJS_PUBLIC_ASSETS_EE2CB4E8 module;
+    BUILD_GRAPH_321CBB04 -->|imports x15| PHONE_INDEXTS_SETTINGSMODALTSX_94884C81
+    PHONE_INDEXTS_SETTINGSMODALTSX_94884C81 -->|imports x15| BUILD_GRAPH_321CBB04
+    SUPABASETS_APPTSX_STORAGETS_29254D08 -->|imports x13| PHONE_INDEXTS_SETTINGSMODALTSX_94884C81
+    SUPABASETS_APPTSX_STORAGETS_29254D08 -->|imports x10| BUILD_GRAPH_321CBB04
+    PHONE_INDEXTS_SETTINGSMODALTSX_94884C81 -->|imports x8| SUPABASETS_APPTSX_STORAGETS_29254D08
+    ENGINETS_RAG_DOCUMENTMANAGERMODALTSX_FDD8C3AC -->|imports x5| BUILD_GRAPH_321CBB04
+    PHONE_INDEXTS_SETTINGSMODALTSX_94884C81 -->|calls x4| ENGINETS_RAG_DOCUMENTMANAGERMODALTSX_FDD8C3AC
+    ENGINETS_RAG_DOCUMENTMANAGERMODALTSX_FDD8C3AC -->|imports x4| PHONE_INDEXTS_SETTINGSMODALTSX_94884C81
+    SUPABASETS_APPTSX_STORAGETS_29254D08 -->|calls x3| ERRORBOUNDARYTSX_COMPONENTS_ERRORBOUNDARY_4C49ADBE
+    BUILD_GRAPH_321CBB04 -->|calls x3| ENGINETS_RAG_DOCUMENTMANAGERMODALTSX_FDD8C3AC
+    BUILD_GRAPH_321CBB04 -->|imports x3| SUPABASETS_APPTSX_STORAGETS_29254D08
+    ENGINETS_RAG_DOCUMENTMANAGERMODALTSX_FDD8C3AC -->|imports x3| SUPABASETS_APPTSX_STORAGETS_29254D08
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h4>Architecture Layers</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>Layer</th><th>Nodes</th><th>Communities</th></tr>
+      <tr><td>Graph Build</td><td>85</td><td><code>1, 2, 4, 7, 8</code></td></tr><tr><td>Ingestion &amp; Updates</td><td>10</td><td><code>6</code></td></tr><tr><td>Supabasets Apptsx Storagets</td><td>34</td><td><code>0</code></td></tr><tr><td>Phone Indexts Settingsmodaltsx</td><td>18</td><td><code>3</code></td></tr><tr><td>Enginets Rag Documentmanagermodaltsx</td><td>15</td><td><code>5</code></td></tr><tr><td>Ref Eslint Plugin</td><td>7</td><td><code>9</code></td></tr><tr><td>Errorboundarytsx Components Errorboundary</td><td>6</td><td><code>10</code></td></tr><tr><td>Swjs Public Assets</td><td>2</td><td><code>11</code></td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Core Flow</h4>
+    <div class="arrow-chain">Ingestion &amp; Updates -&gt; Graph Build -&gt; Phone Indexts Settingsmodaltsx -&gt; Supabasets Apptsx Storagets -&gt; Errorboundarytsx Components Errorboundary -&gt; Enginets Rag Documentmanagermodaltsx -&gt; Ref Eslint Plugin</div>
+  </div>
+</div>
+<hr>
+<!-- ====== 2. Graph Build ====== -->
+<h2 id="build-graph">2. Graph Build</h2>
+<p>Graph Build groups implementation around packagejson, tsconfigjson, react, phone, mostly in package.json, tsconfig.json, components/desktop/DesktopApp.tsx. This section covers 85 nodes and 122 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Graph Build (85 nodes, 122 edges)
+    subgraph build_graph_components_desktop_DesktopApp_tsx_742e982d["components/desktop/DesktopApp.tsx"]
+        src_components_desktop_desktopapp_282c0203("DesktopApp.tsx")
+        src_components_desktop_desktopapp_desktopapp_bf4ee4e0("DesktopApp()<br/><small>components/desktop/DesktopApp.tsx</small>")
+        src_components_desktop_desktopapp_voicewaveform_b6ddc765("VoiceWaveform()<br/><small>components/desktop/DesktopApp.tsx</small>")
+    end
+    subgraph build_graph_package_json_4e40bfbd["package.json"]
+        package_582681c2("package.json")
+        ref_react_47bfb9fb("react<br/><small>package.json</small>")
+        ref_lucide_react_d9b8ec11("lucide-react<br/><small>package.json</small>")
+    end
+    subgraph build_graph_src_phone_PhoneAssistant_tsx_ecb3eb76["src/phone/PhoneAssistant.tsx"]
+        src_phone_phoneassistant_33fa0b23("PhoneAssistant.tsx")
+        src_phone_phoneassistant_phoneassistant_f82a2643("PhoneAssistant()<br/><small>src/phone/PhoneAssistant.tsx</small>")
+        src_phone_phoneassistant_voicewaveform_0bd71145("VoiceWaveform()<br/><small>src/phone/PhoneAssistant.tsx</small>")
+    end
+    subgraph build_graph_components_camera_CameraCaptureModal_9689a5a8["components/camera/CameraCaptureModal.tsx"]
+        src_components_camera_cameracapturemodal_camerac_4c730310("CameraCaptureModal()<br/><small>components/camera/CameraCaptureModal.tsx</small>")
+        src_components_camera_cameracapturemodal_602a645a("CameraCaptureModal.tsx")
+    end
+    subgraph build_graph_src_phone_PhoneLogin_tsx_dce67d26["src/phone/PhoneLogin.tsx"]
+        src_phone_phonelogin_8c028cd1("PhoneLogin.tsx")
+        src_phone_phonelogin_phonelogin_460d698a("PhoneLogin()<br/><small>src/phone/PhoneLogin.tsx</small>")
+    end
+    subgraph build_graph_src_phone_PhoneOrb_tsx_e5d9019c["src/phone/PhoneOrb.tsx"]
+        src_phone_phoneorb_phoneorb_55136eee("PhoneOrb()<br/><small>src/phone/PhoneOrb.tsx</small>")
+        src_phone_phoneorb_4b3ea72a("PhoneOrb.tsx")
+    end
+    src_phone_phonevoicemode_65ec3e61("PhoneVoiceMode.tsx")
+    src_types_index_message_4d6cf97f("Message<br/><small>src/types/index.ts</small>")
+    vite_config_433f92aa("vite.config.ts")
+    src_components_desktop_desktopapp_desktopapp_bf4ee4e0 -->|calls| src_phone_phoneorb_phoneorb_55136eee
+    src_components_desktop_desktopapp_desktopapp_bf4ee4e0 -->|calls| src_components_desktop_desktopapp_voicewaveform_b6ddc765
+    src_components_desktop_desktopapp_desktopapp_bf4ee4e0 -->|calls| src_components_camera_cameracapturemodal_camerac_4c730310
+    src_phone_phoneassistant_phoneassistant_f82a2643 -->|calls| src_phone_phoneorb_phoneorb_55136eee
+    src_phone_phoneassistant_phoneassistant_f82a2643 -->|calls| src_phone_phoneassistant_voicewaveform_0bd71145
+    src_phone_phoneassistant_phoneassistant_f82a2643 -->|calls| src_components_camera_cameracapturemodal_camerac_4c730310
+    src_phone_phonelogin_phonelogin_460d698a -->|calls| src_phone_phoneorb_phoneorb_55136eee
+    src_components_camera_cameracapturemodal_602a645a -->|imports| ref_react_47bfb9fb
+    src_components_camera_cameracapturemodal_602a645a -->|imports| ref_lucide_react_d9b8ec11
+    src_components_desktop_desktopapp_282c0203 -->|imports| src_phone_phoneorb_phoneorb_55136eee
+    src_components_desktop_desktopapp_282c0203 -->|imports| src_components_camera_cameracapturemodal_camerac_4c730310
+    src_components_desktop_desktopapp_282c0203 -->|imports| src_types_index_message_4d6cf97f
+    src_components_desktop_desktopapp_282c0203 -->|imports| ref_react_47bfb9fb
+    src_components_desktop_desktopapp_282c0203 -->|imports| ref_lucide_react_d9b8ec11
+    src_components_desktop_desktopapp_282c0203 -->|imports| src_phone_phoneorb_4b3ea72a
+    src_components_desktop_desktopapp_282c0203 -->|imports| src_components_camera_cameracapturemodal_602a645a
+    src_phone_phoneassistant_33fa0b23 -->|imports| src_phone_phoneorb_phoneorb_55136eee
+    src_phone_phoneassistant_33fa0b23 -->|imports| src_components_camera_cameracapturemodal_camerac_4c730310
+    src_phone_phoneassistant_33fa0b23 -->|imports| src_types_index_message_4d6cf97f
+    src_phone_phoneassistant_33fa0b23 -->|imports| ref_react_47bfb9fb
+    src_phone_phoneassistant_33fa0b23 -->|imports| src_phone_phoneorb_4b3ea72a
+    src_phone_phoneassistant_33fa0b23 -->|imports| src_components_camera_cameracapturemodal_602a645a
+    src_phone_phoneassistant_33fa0b23 -->|imports| ref_lucide_react_d9b8ec11
+    src_phone_phonelogin_8c028cd1 -->|imports| src_phone_phoneorb_phoneorb_55136eee
+    %% Omitted for readability: 67 nodes, 10 edges
+    class src_components_desktop_desktopapp_282c0203 ui;
+    class src_components_desktop_desktopapp_desktopapp_bf4ee4e0 ui;
+    class src_components_desktop_desktopapp_voicewaveform_b6ddc765 ui;
+    class package_582681c2 function;
+    class ref_react_47bfb9fb function;
+    class ref_lucide_react_d9b8ec11 function;
+    class src_phone_phoneassistant_33fa0b23 ui;
+    class src_phone_phoneassistant_phoneassistant_f82a2643 ui;
+    class src_phone_phoneassistant_voicewaveform_0bd71145 ui;
+    class src_components_camera_cameracapturemodal_camerac_4c730310 ui;
+    class src_components_camera_cameracapturemodal_602a645a ui;
+    class src_phone_phonelogin_8c028cd1 ui;
+    class src_phone_phonelogin_phonelogin_460d698a ui;
+    class src_phone_phoneorb_phoneorb_55136eee ui;
+    class src_phone_phoneorb_4b3ea72a ui;
+    class src_phone_phonevoicemode_65ec3e61 ui;
+    class src_types_index_message_4d6cf97f klass;
+    class vite_config_433f92aa module;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>CameraCaptureModalProps</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>CameraCaptureModalProps node in components/camera/CameraCaptureModal.tsx.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>DesktopAppProps</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>DesktopAppProps node in components/desktop/DesktopApp.tsx.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>PhoneAssistantProps</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>PhoneAssistantProps node in src/phone/PhoneAssistant.tsx.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>PhoneLoginProps</code><br><small style="color:var(--muted)">src/phone/PhoneLogin.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>PhoneLoginProps node in src/phone/PhoneLogin.tsx.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>PhoneOrbProps</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>PhoneOrbProps node in src/phone/PhoneOrb.tsx.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>PhoneVoiceModeProps</code><br><small style="color:var(--muted)">src/phone/PhoneVoiceMode.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>PhoneVoiceModeProps node in src/phone/PhoneVoiceMode.tsx.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>Message</code><br><small style="color:var(--muted)">src/types/index.ts</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>ai-engine.ts</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneAssistant.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small><br>+3 more</td>
+  <td>No direct outbound edge</td>
+  <td>Message node in src/types/index.ts.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>CameraCaptureModal()</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>DesktopApp()</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneAssistant()</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small><br>+1 more</td>
+  <td>No direct outbound edge</td>
+  <td>CameraCaptureModal() node in components/camera/CameraCaptureModal.tsx.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>DesktopApp()</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>CameraCaptureModal()</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small><br><code>generateAiResponse()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>PhoneOrb()</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small><br>+2 more</td>
+  <td>DesktopApp() node in components/desktop/DesktopApp.tsx.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>VoiceWaveform()</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>DesktopApp()</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>VoiceWaveform() node in components/desktop/DesktopApp.tsx.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>PhoneAssistant()</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp()</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small><br><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><code>CameraCaptureModal()</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small><br><code>PhoneOrb()</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small><br><code>VoiceWaveform()</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td>PhoneAssistant() node in src/phone/PhoneAssistant.tsx.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>VoiceWaveform()</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneAssistant()</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>VoiceWaveform() node in src/phone/PhoneAssistant.tsx.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>PhoneLogin()</code><br><small style="color:var(--muted)">src/phone/PhoneLogin.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>PhoneOrb()</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small></td>
+  <td>PhoneLogin() node in src/phone/PhoneLogin.tsx.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>PhoneOrb()</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>DesktopApp()</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneAssistant()</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small><br>+5 more</td>
+  <td>No direct outbound edge</td>
+  <td>PhoneOrb() node in src/phone/PhoneOrb.tsx.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>CameraCaptureModal.tsx</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneAssistant.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td><code>lucide-react</code><br><small style="color:var(--muted)">package.json</small><br><code>react</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td>Module file in components/camera/CameraCaptureModal.tsx.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>DesktopApp</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>@gsap/react</code><br><small style="color:var(--muted)">package.json</small><br><code>ai-engine.ts</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>CameraCaptureModal()</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small><br>+17 more</td>
+  <td>Module file in components/desktop/DesktopApp.tsx.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>PhoneAssistant.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><code>@gsap/react</code><br><small style="color:var(--muted)">package.json</small><br><code>CameraCaptureModal()</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small><br><code>CameraCaptureModal.tsx</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small><br>+10 more</td>
+  <td>Module file in src/phone/PhoneAssistant.tsx.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>PhoneLogin.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneLogin.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>lucide-react</code><br><small style="color:var(--muted)">package.json</small><br><code>PhoneOrb()</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small><br>+4 more</td>
+  <td>Module file in src/phone/PhoneLogin.tsx.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>PhoneOrb.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneAssistant.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small><br><code>PhoneLogin.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneLogin.tsx</small><br>+1 more</td>
+  <td><code>react</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td>Module file in src/phone/PhoneOrb.tsx.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>PhoneVoiceMode.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneVoiceMode.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><code>lucide-react</code><br><small style="color:var(--muted)">package.json</small><br><code>PhoneOrb()</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small><br><code>PhoneOrb.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small><br>+2 more</td>
+  <td>Module file in src/phone/PhoneVoiceMode.tsx.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>gsap</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>package.json</code><br><small style="color:var(--muted)">package.json</small><br><code>PhoneAssistant.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>gsap node in package.json.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>@gsap/react</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>package.json</code><br><small style="color:var(--muted)">package.json</small><br><code>PhoneAssistant.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>@gsap/react node in package.json.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>lucide-react</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>CameraCaptureModal.tsx</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>DocumentManagerModal.tsx</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small><br>+6 more</td>
+  <td>No direct outbound edge</td>
+  <td>lucide-react node in package.json.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>react</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>CameraCaptureModal.tsx</code><br><small style="color:var(--muted)">components/camera/CameraCaptureModal.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br>+13 more</td>
+  <td>No direct outbound edge</td>
+  <td>react node in package.json.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>react-markdown</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>package.json</code><br><small style="color:var(--muted)">package.json</small><br><code>PhoneAssistant.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>Exports documentation data to a target format.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>sonner</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>DocumentManagerModal.tsx</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small><br>+6 more</td>
+  <td>No direct outbound edge</td>
+  <td>sonner node in package.json.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>package.json</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>@gsap/react</code><br><small style="color:var(--muted)">package.json</small><br><code>@supabase/supabase-js</code><br><small style="color:var(--muted)">package.json</small><br><code>@tailwindcss/vite</code><br><small style="color:var(--muted)">package.json</small><br>+13 more</td>
+  <td>package.json node in package.json.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>name</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>name node in package.json.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>private</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>private node in package.json.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>scripts</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>scripts node in package.json.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>package.json</code></td><td>43 nodes</td></tr>
+<tr><td><code>tsconfig.json</code></td><td>17 nodes</td></tr>
+<tr><td><code>components/desktop/DesktopApp.tsx</code></td><td>4 nodes</td></tr>
+<tr><td><code>src/phone/PhoneAssistant.tsx</code></td><td>4 nodes</td></tr>
+<tr><td><code>components/camera/CameraCaptureModal.tsx</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/phone/PhoneLogin.tsx</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/phone/PhoneOrb.tsx</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/main.tsx</code></td><td>2 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x56, imports x34, imports x24, calls x7. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 3. Ingestion & Updates ====== -->
+<h2 id="ingest-cache-update">3. Ingestion &amp; Updates</h2>
+<p>Ingestion &amp; Updates groups implementation around manifestjson, public, color, name, mostly in public/manifest.json. This section covers 10 nodes and 9 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Ingestion &amp; Updates (10 nodes, 9 edges)
+    public_manifest_388917a5("manifest.json")
+    public_manifest_icons_8f77cdcc("icons<br/><small>public/manifest.json</small>")
+    public_manifest_name_15b4c29b("name<br/><small>public/manifest.json</small>")
+    public_manifest_short_name_78e974be("short_name<br/><small>public/manifest.json</small>")
+    public_manifest_description_25b602b8("description<br/><small>public/manifest.json</small>")
+    public_manifest_start_url_8e1f7f7a("start_url<br/><small>public/manifest.json</small>")
+    public_manifest_display_36ace0b3("display<br/><small>public/manifest.json</small>")
+    public_manifest_background_color_5a35b652("background_color<br/><small>public/manifest.json</small>")
+    public_manifest_theme_color_be80c7b7("theme_color<br/><small>public/manifest.json</small>")
+    public_manifest_orientation_d5606a1f("orientation<br/><small>public/manifest.json</small>")
+    public_manifest_388917a5 -->|contains| public_manifest_icons_8f77cdcc
+    public_manifest_388917a5 -->|contains| public_manifest_name_15b4c29b
+    public_manifest_388917a5 -->|contains| public_manifest_short_name_78e974be
+    public_manifest_388917a5 -->|contains| public_manifest_description_25b602b8
+    public_manifest_388917a5 -->|contains| public_manifest_start_url_8e1f7f7a
+    public_manifest_388917a5 -->|contains| public_manifest_display_36ace0b3
+    public_manifest_388917a5 -->|contains| public_manifest_background_color_5a35b652
+    public_manifest_388917a5 -->|contains| public_manifest_theme_color_be80c7b7
+    public_manifest_388917a5 -->|contains| public_manifest_orientation_d5606a1f
+    class public_manifest_388917a5 function;
+    class public_manifest_icons_8f77cdcc function;
+    class public_manifest_name_15b4c29b function;
+    class public_manifest_short_name_78e974be function;
+    class public_manifest_description_25b602b8 function;
+    class public_manifest_start_url_8e1f7f7a function;
+    class public_manifest_display_36ace0b3 function;
+    class public_manifest_background_color_5a35b652 function;
+    class public_manifest_theme_color_be80c7b7 function;
+    class public_manifest_orientation_d5606a1f function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>manifest.json</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>manifest.json node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>background_color</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>background_color node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>description</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>description node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>display</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>display node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>icons</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>icons node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>name</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>name node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>orientation</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>orientation node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>short_name</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>short_name node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>start_url</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>start_url node in public/manifest.json.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>theme_color</code><br><small style="color:var(--muted)">public/manifest.json</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>theme_color node in public/manifest.json.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>public/manifest.json</code></td><td>10 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x9. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 4. Supabasets Apptsx Storagets ====== -->
+<h2 id="supabasets-apptsx-storagets">4. Supabasets Apptsx Storagets</h2>
+<p>Supabasets Apptsx Storagets groups implementation around supabasets, apptsx, storagets, pwats, mostly in src/lib/supabase.ts, src/App.tsx, src/lib/storage.ts. This section covers 34 nodes and 71 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Supabasets Apptsx Storagets (34 nodes, 71 edges)
+    subgraph supabasets_apptsx_storagets_src_lib_supabase_ts_95bc284a["src/lib/supabase.ts"]
+        src_lib_supabase_6d69975a("supabase.ts")
+        src_lib_supabase_recordusersearch_cf23c4bc("recordUserSearch()<br/><small>src/lib/supabase.ts</small>")
+        src_lib_supabase_signinasguest_08195560("signInAsGuest()<br/><small>src/lib/supabase.ts</small>")
+        src_lib_supabase_signoutremote_a04fcb62("signOutRemote()<br/><small>src/lib/supabase.ts</small>")
+        src_lib_supabase_fetchuserprofile_e551d6c3("fetchUserProfile()<br/><small>src/lib/supabase.ts</small>")
+        src_lib_supabase_usertoprofile_0e4ce7b1("userToProfile()<br/><small>src/lib/supabase.ts</small>")
+        src_lib_supabase_syncuserprofile_d10ffc85("syncUserProfile()<br/><small>src/lib/supabase.ts</small>")
+        src_lib_supabase_signinwithgoogle_a63dd559("signInWithGoogle()<br/><small>src/lib/supabase.ts</small>")
+        src_lib_supabase_signinwithemaillink_0ce487ab("signInWithEmailLink()<br/><small>src/lib/supabase.ts</small>")
+    end
+    subgraph supabasets_apptsx_storagets_src_App_tsx_c9a230d6["src/App.tsx"]
+        src_app_46efd68e("App.tsx")
+        src_app_app_f316b20d("App()<br/><small>src/App.tsx</small>")
+        src_app_splash_364ad97f("Splash()<br/><small>src/App.tsx</small>")
+        src_app_phoneapp_68c37ee0("PhoneApp<br/><small>src/App.tsx</small>")
+        src_app_desktopapp_36ca98e4("DesktopApp<br/><small>src/App.tsx</small>")
+    end
+    src_hooks_usedevice_usedevice_1a154a34("useDevice()<br/><small>src/hooks/useDevice.ts</small>")
+    src_lib_id_newid_ca685416("newId()<br/><small>src/lib/id.ts</small>")
+    src_lib_storage_892f70df("storage.ts")
+    src_phone_pwa_registerpwa_0e4f6446("registerPWA()<br/><small>src/phone/pwa.ts</small>")
+    src_app_app_f316b20d -->|calls| src_lib_supabase_signinasguest_08195560
+    src_app_app_f316b20d -->|calls| src_lib_supabase_signoutremote_a04fcb62
+    src_app_app_f316b20d -->|calls| src_app_splash_364ad97f
+    src_app_app_f316b20d -->|calls| src_app_phoneapp_68c37ee0
+    src_app_app_f316b20d -->|calls| src_app_desktopapp_36ca98e4
+    src_app_app_f316b20d -->|calls| src_hooks_usedevice_usedevice_1a154a34
+    src_app_app_f316b20d -->|calls| src_phone_pwa_registerpwa_0e4f6446
+    src_app_app_f316b20d -->|calls| src_lib_supabase_fetchuserprofile_e551d6c3
+    src_app_app_f316b20d -->|calls| src_lib_supabase_usertoprofile_0e4ce7b1
+    src_app_app_f316b20d -->|calls| src_lib_supabase_syncuserprofile_d10ffc85
+    src_app_app_f316b20d -->|calls| src_lib_supabase_signinwithgoogle_a63dd559
+    src_app_app_f316b20d -->|calls| src_lib_id_newid_ca685416
+    src_app_app_f316b20d -->|calls| src_lib_supabase_signinwithemaillink_0ce487ab
+    src_lib_supabase_recordusersearch_cf23c4bc -->|calls| src_lib_id_newid_ca685416
+    src_app_46efd68e -->|imports| src_phone_pwa_registerpwa_0e4f6446
+    src_app_46efd68e -->|imports| src_hooks_usedevice_usedevice_1a154a34
+    src_app_46efd68e -->|imports| src_lib_id_newid_ca685416
+    src_app_46efd68e -->|imports| src_lib_supabase_fetchuserprofile_e551d6c3
+    src_app_46efd68e -->|imports| src_lib_supabase_signinasguest_08195560
+    src_app_46efd68e -->|imports| src_lib_supabase_signinwithemaillink_0ce487ab
+    src_app_46efd68e -->|imports| src_lib_supabase_signinwithgoogle_a63dd559
+    src_app_46efd68e -->|imports| src_lib_supabase_signoutremote_a04fcb62
+    src_app_46efd68e -->|imports| src_lib_supabase_syncuserprofile_d10ffc85
+    src_app_46efd68e -->|imports| src_lib_supabase_usertoprofile_0e4ce7b1
+    %% Omitted for readability: 16 nodes, 7 edges
+    class src_lib_supabase_6d69975a module;
+    class src_lib_supabase_recordusersearch_cf23c4bc function;
+    class src_lib_supabase_signinasguest_08195560 function;
+    class src_lib_supabase_signoutremote_a04fcb62 function;
+    class src_lib_supabase_fetchuserprofile_e551d6c3 function;
+    class src_lib_supabase_usertoprofile_0e4ce7b1 function;
+    class src_lib_supabase_syncuserprofile_d10ffc85 function;
+    class src_lib_supabase_signinwithgoogle_a63dd559 function;
+    class src_lib_supabase_signinwithemaillink_0ce487ab function;
+    class src_app_46efd68e ui;
+    class src_app_app_f316b20d ui;
+    class src_app_splash_364ad97f ui;
+    class src_app_phoneapp_68c37ee0 ui;
+    class src_app_desktopapp_36ca98e4 ui;
+    class src_hooks_usedevice_usedevice_1a154a34 ui;
+    class src_lib_id_newid_ca685416 function;
+    class src_lib_storage_892f70df module;
+    class src_phone_pwa_registerpwa_0e4f6446 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>UserSearchRecord</code><br><small style="color:var(--muted)">src/types/index.ts</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small><br><code>supabase.ts</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>UserSearchRecord node in src/types/index.ts.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>main.tsx</code><br><small style="color:var(--muted)">src/main.tsx</small></td>
+  <td><code>DesktopApp</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>ErrorBoundary</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small><br><code>fetchUserProfile()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small><br>+12 more</td>
+  <td>App() node in src/App.tsx.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>Splash()</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>Splash() node in src/App.tsx.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>useDevice()</code><br><small style="color:var(--muted)">src/hooks/useDevice.ts</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>useDevice() node in src/hooks/useDevice.ts.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>newId()</code><br><small style="color:var(--muted)">src/lib/id.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>recordUserSearch()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small><br>+4 more</td>
+  <td>No direct outbound edge</td>
+  <td>newId() node in src/lib/id.ts.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>read()</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>read() node in src/lib/storage.ts.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>write()</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>write() node in src/lib/storage.ts.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>deleteRemoteUserData()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>deleteRemoteUserData() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>fetchRemoteThreads()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>fetchRemoteThreads() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>fetchUserProfile()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>fetchUserProfile() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>fetchUserSearches()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>fetchUserSearches() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>recordUserSearch()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td><code>newId()</code><br><small style="color:var(--muted)">src/lib/id.ts</small></td>
+  <td>recordUserSearch() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>signInAsGuest()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>signInAsGuest() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>signInWithEmailLink()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>signInWithEmailLink() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>signInWithGoogle()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>signInWithGoogle() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>signOutRemote()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>signOutRemote() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>syncThreads()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>syncThreads() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>syncUserProfile()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>syncUserProfile() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>userToProfile()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>userToProfile() node in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>registerPWA()</code><br><small style="color:var(--muted)">src/phone/pwa.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>registerPWA() node in src/phone/pwa.ts.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>triggerPWAInstall()</code><br><small style="color:var(--muted)">src/phone/pwa.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>triggerPWAInstall() node in src/phone/pwa.ts.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>main.tsx</code><br><small style="color:var(--muted)">src/main.tsx</small></td>
+  <td><code>ErrorBoundary</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small><br><code>ErrorBoundary.tsx</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small><br><code>fetchUserProfile()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small><br>+23 more</td>
+  <td>Module file in src/App.tsx.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>DesktopApp</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small></td>
+  <td>DesktopApp node in src/App.tsx.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>PhoneApp</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td>PhoneApp node in src/App.tsx.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>useDevice.ts</code><br><small style="color:var(--muted)">src/hooks/useDevice.ts</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>react</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td>Module file in src/hooks/useDevice.ts.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>id.ts</code><br><small style="color:var(--muted)">src/lib/id.ts</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small><br><code>supabase.ts</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small><br>+1 more</td>
+  <td>No direct outbound edge</td>
+  <td>Module file in src/lib/id.ts.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>rag-engine.ts</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small><br>+2 more</td>
+  <td><code>deleteRemoteUserData()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small><br><code>fetchRemoteThreads()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small><br><code>fetchUserSearches()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small><br>+10 more</td>
+  <td>Module file in src/lib/storage.ts.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>LEGACY_KEYS</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>LEGACY_KEYS node in src/lib/storage.ts.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>supabase.ts</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>ai-engine.ts</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>SettingsModal.tsx</code><br><small style="color:var(--muted)">components/settings/SettingsModal.tsx</small><br>+1 more</td>
+  <td><code>@supabase/supabase-js</code><br><small style="color:var(--muted)">package.json</small><br><code>id.ts</code><br><small style="color:var(--muted)">src/lib/id.ts</small><br><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small><br>+5 more</td>
+  <td>Module file in src/lib/supabase.ts.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>isSupabaseConfigured</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>SettingsModal.tsx</code><br><small style="color:var(--muted)">components/settings/SettingsModal.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>Reads, resolves, or persists project configuration.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/lib/supabase.ts</code></td><td>17 nodes</td></tr>
+<tr><td><code>src/App.tsx</code></td><td>5 nodes</td></tr>
+<tr><td><code>src/lib/storage.ts</code></td><td>4 nodes</td></tr>
+<tr><td><code>src/phone/pwa.ts</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/hooks/useDevice.ts</code></td><td>2 nodes</td></tr>
+<tr><td><code>src/lib/id.ts</code></td><td>2 nodes</td></tr>
+<tr><td><code>src/types/index.ts</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x27, imports x22, calls x14, imports x8. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 5. Phone Indexts Settingsmodaltsx ====== -->
+<h2 id="phone-indexts-settingsmodaltsx">5. Phone Indexts Settingsmodaltsx</h2>
+<p>Phone Indexts Settingsmodaltsx groups implementation around phone, indexts, settingsmodaltsx, phoneapptsx, mostly in src/types/index.ts, components/settings/SettingsModal.tsx, src/phone/PhoneApp.tsx. This section covers 18 nodes and 39 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Phone Indexts Settingsmodaltsx (18 nodes, 39 edges)
+    subgraph phone_indexts_settingsmodaltsx_src_types_index_t_70df22b0["src/types/index.ts"]
+        src_types_index_userprofile_520e1dad("UserProfile<br/><small>src/types/index.ts</small>")
+        src_types_index_37516af1("index.ts")
+        src_types_index_thread_98eb9c17("Thread<br/><small>src/types/index.ts</small>")
+        src_types_index_role_09c0fbf4("Role<br/><small>src/types/index.ts</small>")
+    end
+    subgraph phone_indexts_settingsmodaltsx_components_settin_7a876b32["components/settings/SettingsModal.tsx"]
+        src_components_settings_settingsmodal_1f47b307("SettingsModal.tsx")
+        src_components_settings_settingsmodal_settingsmo_2f53b079("SettingsModal()<br/><small>components/settings/SettingsModal.tsx</small>")
+        src_components_settings_settingsmodal_settingsmo_66e9a01c("SettingsModalProps<br/><small>components/settings/SettingsModal.tsx</small>")
+    end
+    subgraph phone_indexts_settingsmodaltsx_src_phone_PhoneAp_93854641["src/phone/PhoneApp.tsx"]
+        src_phone_phoneapp_c0b24b2b("PhoneApp.tsx")
+        src_phone_phoneapp_phoneapp_dc571e05("PhoneApp()<br/><small>src/phone/PhoneApp.tsx</small>")
+        src_phone_phoneapp_phoneappprops_76eddabf("PhoneAppProps<br/><small>src/phone/PhoneApp.tsx</small>")
+    end
+    subgraph phone_indexts_settingsmodaltsx_src_phone_PhoneSi_c84f0434["src/phone/PhoneSidebarDrawer.tsx"]
+        src_phone_phonesidebardrawer_ee96582b("PhoneSidebarDrawer.tsx")
+        src_phone_phonesidebardrawer_phonesidebardrawer_2aafb41c("PhoneSidebarDrawer()<br/><small>src/phone/PhoneSidebarDrawer.tsx</small>")
+        src_phone_phonesidebardrawer_phonesidebardrawerp_c8b818c5("PhoneSidebarDrawerProps<br/><small>src/phone/PhoneSidebarDrawer.tsx</small>")
+    end
+    subgraph phone_indexts_settingsmodaltsx_src_hooks_useChat_5b77849b["src/hooks/useChat.ts"]
+        src_hooks_usechat_a530adc4("useChat.ts")
+        src_hooks_usechat_usechat_bac7816a("useChat()<br/><small>src/hooks/useChat.ts</small>")
+    end
+    src_lib_storage_storage_80c8428b("storage<br/><small>src/lib/storage.ts</small>")
+    src_lib_supabase_testsupabaseconnection_6aadcd61("testSupabaseConnection()<br/><small>src/lib/supabase.ts</small>")
+    src_phone_phonevoicemode_phonevoicemode_5cbd20aa("PhoneVoiceMode()<br/><small>src/phone/PhoneVoiceMode.tsx</small>")
+    src_components_settings_settingsmodal_settingsmo_2f53b079 -->|calls| src_lib_supabase_testsupabaseconnection_6aadcd61
+    src_phone_phoneapp_phoneapp_dc571e05 -->|calls| src_hooks_usechat_usechat_bac7816a
+    src_phone_phoneapp_phoneapp_dc571e05 -->|calls| src_phone_phonevoicemode_phonevoicemode_5cbd20aa
+    src_phone_phoneapp_phoneapp_dc571e05 -->|calls| src_phone_phonesidebardrawer_phonesidebardrawer_2aafb41c
+    src_phone_phoneapp_phoneapp_dc571e05 -->|calls| src_components_settings_settingsmodal_settingsmo_2f53b079
+    src_components_settings_settingsmodal_1f47b307 -->|imports| src_types_index_userprofile_520e1dad
+    src_components_settings_settingsmodal_1f47b307 -->|imports| src_lib_storage_storage_80c8428b
+    src_components_settings_settingsmodal_1f47b307 -->|imports| src_lib_supabase_testsupabaseconnection_6aadcd61
+    src_components_settings_settingsmodal_1f47b307 -->|imports| src_types_index_37516af1
+    src_hooks_usechat_a530adc4 -->|imports| src_types_index_thread_98eb9c17
+    src_hooks_usechat_a530adc4 -->|imports| src_types_index_userprofile_520e1dad
+    src_hooks_usechat_a530adc4 -->|imports| src_lib_storage_storage_80c8428b
+    src_hooks_usechat_a530adc4 -->|imports| src_types_index_37516af1
+    src_phone_phoneapp_c0b24b2b -->|imports| src_phone_phonevoicemode_phonevoicemode_5cbd20aa
+    src_phone_phoneapp_c0b24b2b -->|imports| src_phone_phonesidebardrawer_phonesidebardrawer_2aafb41c
+    src_phone_phoneapp_c0b24b2b -->|imports| src_components_settings_settingsmodal_settingsmo_2f53b079
+    src_phone_phoneapp_c0b24b2b -->|imports| src_types_index_userprofile_520e1dad
+    src_phone_phoneapp_c0b24b2b -->|imports| src_hooks_usechat_usechat_bac7816a
+    src_phone_phoneapp_c0b24b2b -->|imports| src_phone_phonesidebardrawer_ee96582b
+    src_phone_phoneapp_c0b24b2b -->|imports| src_components_settings_settingsmodal_1f47b307
+    src_phone_phoneapp_c0b24b2b -->|imports| src_types_index_37516af1
+    src_phone_phoneapp_c0b24b2b -->|imports| src_hooks_usechat_a530adc4
+    src_phone_phonesidebardrawer_ee96582b -->|imports| src_types_index_thread_98eb9c17
+    src_phone_phonesidebardrawer_ee96582b -->|imports| src_types_index_userprofile_520e1dad
+    %% Omitted for readability: 0 nodes, 1 edges
+    class src_types_index_userprofile_520e1dad klass;
+    class src_types_index_37516af1 module;
+    class src_types_index_thread_98eb9c17 klass;
+    class src_types_index_role_09c0fbf4 klass;
+    class src_components_settings_settingsmodal_1f47b307 ui;
+    class src_components_settings_settingsmodal_settingsmo_2f53b079 ui;
+    class src_components_settings_settingsmodal_settingsmo_66e9a01c ui;
+    class src_phone_phoneapp_c0b24b2b ui;
+    class src_phone_phoneapp_phoneapp_dc571e05 ui;
+    class src_phone_phoneapp_phoneappprops_76eddabf ui;
+    class src_phone_phonesidebardrawer_ee96582b ui;
+    class src_phone_phonesidebardrawer_phonesidebardrawer_2aafb41c ui;
+    class src_phone_phonesidebardrawer_phonesidebardrawerp_c8b818c5 ui;
+    class src_hooks_usechat_a530adc4 ui;
+    class src_hooks_usechat_usechat_bac7816a ui;
+    class src_lib_storage_storage_80c8428b function;
+    class src_lib_supabase_testsupabaseconnection_6aadcd61 function;
+    class src_phone_phonevoicemode_phonevoicemode_5cbd20aa ui;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>SettingsModalProps</code><br><small style="color:var(--muted)">components/settings/SettingsModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>SettingsModalProps node in components/settings/SettingsModal.tsx.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>PhoneAppProps</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>PhoneAppProps node in src/phone/PhoneApp.tsx.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>PhoneSidebarDrawerProps</code><br><small style="color:var(--muted)">src/phone/PhoneSidebarDrawer.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Organizes documentation pages, navigation, or content lookup.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>Role</code><br><small style="color:var(--muted)">src/types/index.ts</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Role node in src/types/index.ts.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>Thread</code><br><small style="color:var(--muted)">src/types/index.ts</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneSidebarDrawer.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneSidebarDrawer.tsx</small><br><code>storage.ts</code><br><small style="color:var(--muted)">src/lib/storage.ts</small><br>+2 more</td>
+  <td>No direct outbound edge</td>
+  <td>Thread node in src/types/index.ts.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>UserProfile</code><br><small style="color:var(--muted)">src/types/index.ts</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small><br>+7 more</td>
+  <td>No direct outbound edge</td>
+  <td>UserProfile node in src/types/index.ts.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>SettingsModal()</code><br><small style="color:var(--muted)">components/settings/SettingsModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>DesktopApp()</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneApp()</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small><br>+1 more</td>
+  <td><code>testSupabaseConnection()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td>SettingsModal() node in components/settings/SettingsModal.tsx.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>useChat()</code><br><small style="color:var(--muted)">src/hooks/useChat.ts</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp()</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small><br><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><code>generateAiResponse()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>newId()</code><br><small style="color:var(--muted)">src/lib/id.ts</small></td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>testSupabaseConnection()</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>SettingsModal()</code><br><small style="color:var(--muted)">components/settings/SettingsModal.tsx</small><br><code>SettingsModal.tsx</code><br><small style="color:var(--muted)">components/settings/SettingsModal.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>PhoneApp()</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>PhoneAssistant()</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small><br><code>PhoneSidebarDrawer()</code><br><small style="color:var(--muted)">src/phone/PhoneSidebarDrawer.tsx</small><br><code>PhoneVoiceMode()</code><br><small style="color:var(--muted)">src/phone/PhoneVoiceMode.tsx</small><br>+2 more</td>
+  <td>PhoneApp() node in src/phone/PhoneApp.tsx.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>PhoneSidebarDrawer()</code><br><small style="color:var(--muted)">src/phone/PhoneSidebarDrawer.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp()</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small><br><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>Organizes documentation pages, navigation, or content lookup.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>PhoneVoiceMode()</code><br><small style="color:var(--muted)">src/phone/PhoneVoiceMode.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp()</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small><br><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><code>PhoneOrb()</code><br><small style="color:var(--muted)">src/phone/PhoneOrb.tsx</small></td>
+  <td>PhoneVoiceMode() node in src/phone/PhoneVoiceMode.tsx.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>SettingsModal.tsx</code><br><small style="color:var(--muted)">components/settings/SettingsModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>isSupabaseConfigured</code><br><small style="color:var(--muted)">src/lib/supabase.ts</small><br><code>lucide-react</code><br><small style="color:var(--muted)">package.json</small><br>+7 more</td>
+  <td>Module file in components/settings/SettingsModal.tsx.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>useChat.ts</code><br><small style="color:var(--muted)">src/hooks/useChat.ts</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><code>ai-engine.ts</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>generateAiResponse()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>id.ts</code><br><small style="color:var(--muted)">src/lib/id.ts</small><br>+9 more</td>
+  <td>Module file in src/hooks/useChat.ts.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>storage</code><br><small style="color:var(--muted)">src/lib/storage.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>rag-engine.ts</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small><br>+2 more</td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>PhoneAssistant()</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small><br><code>PhoneAssistant.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneAssistant.tsx</small><br>+10 more</td>
+  <td>Module file in src/phone/PhoneApp.tsx.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>PhoneSidebarDrawer.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneSidebarDrawer.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>PhoneApp.tsx</code><br><small style="color:var(--muted)">src/phone/PhoneApp.tsx</small></td>
+  <td><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>lucide-react</code><br><small style="color:var(--muted)">package.json</small><br><code>react</code><br><small style="color:var(--muted)">package.json</small><br>+2 more</td>
+  <td>Module file in src/phone/PhoneSidebarDrawer.tsx.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>ai-engine.ts</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br>+10 more</td>
+  <td>No direct outbound edge</td>
+  <td>Module file in src/types/index.ts.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/types/index.ts</code></td><td>4 nodes</td></tr>
+<tr><td><code>components/settings/SettingsModal.tsx</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/phone/PhoneApp.tsx</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/phone/PhoneSidebarDrawer.tsx</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/hooks/useChat.ts</code></td><td>2 nodes</td></tr>
+<tr><td><code>src/lib/storage.ts</code></td><td>1 nodes</td></tr>
+<tr><td><code>src/lib/supabase.ts</code></td><td>1 nodes</td></tr>
+<tr><td><code>src/phone/PhoneVoiceMode.tsx</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: imports x13, contains x10, imports x7, calls x5. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 6. Enginets Rag Documentmanagermodaltsx ====== -->
+<h2 id="enginets-rag-documentmanagermodaltsx">6. Enginets Rag Documentmanagermodaltsx</h2>
+<p>Enginets Rag Documentmanagermodaltsx groups implementation around enginets, rag, documentmanagermodaltsx, components, mostly in src/lib/ai-engine.ts, src/lib/rag-engine.ts, components/rag/DocumentManagerModal.tsx. This section covers 15 nodes and 21 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Enginets Rag Documentmanagermodaltsx (15 nodes, 21 edges)
+    subgraph enginets_rag_documentmanagermodaltsx_src_lib_ai_db7e1c95["src/lib/ai-engine.ts"]
+        src_lib_ai_engine_generateairesponse_5c4abef9("generateAiResponse()<br/><small>src/lib/ai-engine.ts</small>")
+        src_lib_ai_engine_12f75d9b("ai-engine.ts")
+        src_lib_ai_engine_extracttext_3f0a33fe("extractText()<br/><small>src/lib/ai-engine.ts</small>")
+        src_lib_ai_engine_extractsources_6895687b("extractSources()<br/><small>src/lib/ai-engine.ts</small>")
+        src_lib_ai_engine_followupsfor_1f86bb77("followupsFor()<br/><small>src/lib/ai-engine.ts</small>")
+        src_lib_ai_engine_airesult_21fc70e0("AiResult<br/><small>src/lib/ai-engine.ts</small>")
+    end
+    subgraph enginets_rag_documentmanagermodaltsx_src_lib_rag_273923a9["src/lib/rag-engine.ts"]
+        src_lib_rag_engine_956410ef("rag-engine.ts")
+        src_lib_rag_engine_chunkdocument_3c1af901("chunkDocument()<br/><small>src/lib/rag-engine.ts</small>")
+        src_lib_rag_engine_callprebuiltragmodel_376abfe4("callPrebuiltRagModel()<br/><small>src/lib/rag-engine.ts</small>")
+        src_lib_rag_engine_testragmodelconnection_d36b6d05("testRagModelConnection()<br/><small>src/lib/rag-engine.ts</small>")
+    end
+    subgraph enginets_rag_documentmanagermodaltsx_components_18bdf56e["components/rag/DocumentManagerModal.tsx"]
+        src_components_rag_documentmanagermodal_4014c390("DocumentManagerModal.tsx")
+        src_components_rag_documentmanagermodal_document_f8756b9f("DocumentManagerModal()<br/><small>components/rag/DocumentManagerModal.tsx</small>")
+        src_components_rag_documentmanagermodal_document_77904bb7("DocumentManagerModalProps<br/><small>components/rag/DocumentManagerModal.tsx</small>")
+    end
+    src_types_index_edudocument_419e063f("src_types_index_edudocument")
+    src_types_index_ragsourcechunk_dd0ad166("RagSourceChunk<br/><small>src/types/index.ts</small>")
+    src_components_rag_documentmanagermodal_document_f8756b9f -->|calls| src_lib_rag_engine_chunkdocument_3c1af901
+    src_lib_ai_engine_generateairesponse_5c4abef9 -->|calls| src_lib_ai_engine_extracttext_3f0a33fe
+    src_lib_ai_engine_generateairesponse_5c4abef9 -->|calls| src_lib_ai_engine_extractsources_6895687b
+    src_lib_ai_engine_generateairesponse_5c4abef9 -->|calls| src_lib_ai_engine_followupsfor_1f86bb77
+    src_components_rag_documentmanagermodal_4014c390 -->|imports| src_types_index_edudocument_419e063f
+    src_components_rag_documentmanagermodal_4014c390 -->|imports| src_lib_rag_engine_chunkdocument_3c1af901
+    src_components_rag_documentmanagermodal_4014c390 -->|imports| src_lib_rag_engine_956410ef
+    src_lib_ai_engine_12f75d9b -->|imports| src_types_index_ragsourcechunk_dd0ad166
+    src_lib_rag_engine_956410ef -->|imports| src_types_index_edudocument_419e063f
+    src_lib_rag_engine_956410ef -->|imports| src_types_index_ragsourcechunk_dd0ad166
+    class src_lib_ai_engine_generateairesponse_5c4abef9 function;
+    class src_lib_ai_engine_12f75d9b module;
+    class src_lib_ai_engine_extracttext_3f0a33fe function;
+    class src_lib_ai_engine_extractsources_6895687b function;
+    class src_lib_ai_engine_followupsfor_1f86bb77 function;
+    class src_lib_ai_engine_airesult_21fc70e0 klass;
+    class src_lib_rag_engine_956410ef module;
+    class src_lib_rag_engine_chunkdocument_3c1af901 function;
+    class src_lib_rag_engine_callprebuiltragmodel_376abfe4 function;
+    class src_lib_rag_engine_testragmodelconnection_d36b6d05 function;
+    class src_components_rag_documentmanagermodal_4014c390 ui;
+    class src_components_rag_documentmanagermodal_document_f8756b9f ui;
+    class src_components_rag_documentmanagermodal_document_77904bb7 ui;
+    class src_types_index_edudocument_419e063f function;
+    class src_types_index_ragsourcechunk_dd0ad166 klass;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>DocumentManagerModalProps</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>DocumentManagerModalProps node in components/rag/DocumentManagerModal.tsx.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>AiResult</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AiResult node in src/lib/ai-engine.ts.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>RagSourceChunk</code><br><small style="color:var(--muted)">src/types/index.ts</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>ai-engine.ts</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>rag-engine.ts</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>DocumentManagerModal()</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>chunkDocument()</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small></td>
+  <td>DocumentManagerModal() node in components/rag/DocumentManagerModal.tsx.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>extractSources()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>generateAiResponse()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>extractSources() node in src/lib/ai-engine.ts.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>extractText()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>generateAiResponse()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>extractText() node in src/lib/ai-engine.ts.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>followupsFor()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>generateAiResponse()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>followupsFor() node in src/lib/ai-engine.ts.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>generateAiResponse()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>DesktopApp()</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>useChat()</code><br><small style="color:var(--muted)">src/hooks/useChat.ts</small><br>+1 more</td>
+  <td><code>extractSources()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>extractText()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small><br><code>followupsFor()</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td>generateAiResponse() node in src/lib/ai-engine.ts.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>callPrebuiltRagModel()</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>chunkDocument()</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>DocumentManagerModal()</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small><br><code>DocumentManagerModal.tsx</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>chunkDocument() node in src/lib/rag-engine.ts.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>testRagModelConnection()</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>DocumentManagerModal.tsx</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>chunkDocument()</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small><br><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>lucide-react</code><br><small style="color:var(--muted)">package.json</small><br>+4 more</td>
+  <td>Module file in components/rag/DocumentManagerModal.tsx.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>ai-engine.ts</code><br><small style="color:var(--muted)">src/lib/ai-engine.ts</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>DesktopApp.tsx</code><br><small style="color:var(--muted)">components/desktop/DesktopApp.tsx</small><br><code>useChat.ts</code><br><small style="color:var(--muted)">src/hooks/useChat.ts</small></td>
+  <td><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>Message</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>RagSourceChunk</code><br><small style="color:var(--muted)">src/types/index.ts</small><br>+2 more</td>
+  <td>Module file in src/lib/ai-engine.ts.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>rag-engine.ts</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td><code>DocumentManagerModal.tsx</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small></td>
+  <td><code>index.ts</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>Message</code><br><small style="color:var(--muted)">src/types/index.ts</small><br><code>RagSourceChunk</code><br><small style="color:var(--muted)">src/types/index.ts</small><br>+3 more</td>
+  <td>Module file in src/lib/rag-engine.ts.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>src_types_index_edudocument</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>DocumentManagerModal.tsx</code><br><small style="color:var(--muted)">components/rag/DocumentManagerModal.tsx</small><br><code>rag-engine.ts</code><br><small style="color:var(--muted)">src/lib/rag-engine.ts</small></td>
+  <td>No direct outbound edge</td>
+  <td>src_types_index_edudocument node in project.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/lib/ai-engine.ts</code></td><td>6 nodes</td></tr>
+<tr><td><code>src/lib/rag-engine.ts</code></td><td>4 nodes</td></tr>
+<tr><td><code>components/rag/DocumentManagerModal.tsx</code></td><td>3 nodes</td></tr>
+<tr><td><code>src/types/index.ts</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x10, imports x5, calls x4, references x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 7. Ref Eslint Plugin ====== -->
+<h2 id="ref-eslint-plugin">7. Ref Eslint Plugin</h2>
+<p>Ref Eslint Plugin groups implementation around ref, eslint, plugin, eslintconfigjs, mostly in eslint.config.js. This section covers 7 nodes and 6 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Ref Eslint Plugin (7 nodes, 6 edges)
+    subgraph ref_eslint_plugin_External_generated_0944ab3a["External / generated"]
+        ref_eslint_js_d5412ee4("ref_eslint_js")
+        ref_eslint_plugin_prettier_7813bc78("ref_eslint_plugin_prettier")
+        ref_globals_18122627("ref_globals")
+        ref_eslint_plugin_react_hooks_36b93c5e("plugin react hooks")
+        ref_eslint_plugin_react_refresh_e93dbdba("plugin react refresh")
+        ref_typescript_eslint_8e22e9b7("ref_typescript_eslint")
+    end
+    eslint_config_80901414("eslint.config.js")
+    eslint_config_80901414 -->|imports| ref_eslint_js_d5412ee4
+    eslint_config_80901414 -->|imports| ref_eslint_plugin_prettier_7813bc78
+    eslint_config_80901414 -->|imports| ref_globals_18122627
+    eslint_config_80901414 -->|imports| ref_eslint_plugin_react_hooks_36b93c5e
+    eslint_config_80901414 -->|imports| ref_eslint_plugin_react_refresh_e93dbdba
+    eslint_config_80901414 -->|imports| ref_typescript_eslint_8e22e9b7
+    class ref_eslint_js_d5412ee4 function;
+    class ref_eslint_plugin_prettier_7813bc78 function;
+    class ref_globals_18122627 function;
+    class ref_eslint_plugin_react_hooks_36b93c5e ui;
+    class ref_eslint_plugin_react_refresh_e93dbdba function;
+    class ref_typescript_eslint_8e22e9b7 function;
+    class eslint_config_80901414 module;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>eslint.config.js</code><br><small style="color:var(--muted)">eslint.config.js</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>plugin react hooks</code><br><code>plugin react refresh</code><br><code>ref_eslint_js</code><br>+3 more</td>
+  <td>Reads, resolves, or persists project configuration.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>ref_eslint_js</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>eslint.config.js</code><br><small style="color:var(--muted)">eslint.config.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>ref_eslint_js node in project.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>ref_eslint_plugin_prettier</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>eslint.config.js</code><br><small style="color:var(--muted)">eslint.config.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>ref_eslint_plugin_prettier node in project.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>ref_eslint_plugin_react_hooks</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>eslint.config.js</code><br><small style="color:var(--muted)">eslint.config.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>ref_eslint_plugin_react_hooks node in project.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>ref_eslint_plugin_react_refresh</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>eslint.config.js</code><br><small style="color:var(--muted)">eslint.config.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>ref_eslint_plugin_react_refresh node in project.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>ref_globals</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>eslint.config.js</code><br><small style="color:var(--muted)">eslint.config.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>ref_globals node in project.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>ref_typescript_eslint</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>eslint.config.js</code><br><small style="color:var(--muted)">eslint.config.js</small></td>
+  <td>No direct outbound edge</td>
+  <td>ref_typescript_eslint node in project.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>eslint.config.js</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: imports x6. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 8. Errorboundarytsx Components Errorboundary ====== -->
+<h2 id="errorboundarytsx-components-errorboundary">8. Errorboundarytsx Components Errorboundary</h2>
+<p>Errorboundarytsx Components Errorboundary groups implementation around errorboundarytsx, components, errorboundary, state, mostly in src/components/ErrorBoundary.tsx. This section covers 6 nodes and 5 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Errorboundarytsx Components Errorboundary (6 nodes, 5 edges)
+    src_components_errorboundary_errorboundary_896a097a("ErrorBoundary<br/><small>src/components/ErrorBoundary.tsx</small>")
+    src_components_errorboundary_errorboundary_getde_80f42d31("getDerivedStateFromError()<br/><small>src/components/ErrorBoundary.tsx</small>")
+    src_components_errorboundary_errorboundary_compo_7dfd6c36("componentDidCatch()<br/><small>src/components/ErrorBoundary.tsx</small>")
+    src_components_errorboundary_errorboundary_rende_d093811b("render()<br/><small>src/components/ErrorBoundary.tsx</small>")
+    src_components_errorboundary_4144e084("ErrorBoundary.tsx")
+    src_components_errorboundary_state_c2a57a20("State<br/><small>src/components/ErrorBoundary.tsx</small>")
+    src_components_errorboundary_errorboundary_896a097a -->|method| src_components_errorboundary_errorboundary_getde_80f42d31
+    src_components_errorboundary_errorboundary_896a097a -->|method| src_components_errorboundary_errorboundary_compo_7dfd6c36
+    src_components_errorboundary_errorboundary_896a097a -->|method| src_components_errorboundary_errorboundary_rende_d093811b
+    class src_components_errorboundary_errorboundary_896a097a ui;
+    class src_components_errorboundary_errorboundary_getde_80f42d31 ui;
+    class src_components_errorboundary_errorboundary_compo_7dfd6c36 ui;
+    class src_components_errorboundary_errorboundary_rende_d093811b ui;
+    class src_components_errorboundary_4144e084 ui;
+    class src_components_errorboundary_state_c2a57a20 ui;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>ErrorBoundary</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App()</code><br><small style="color:var(--muted)">src/App.tsx</small><br><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>componentDidCatch()</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small><br><code>getDerivedStateFromError()</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small><br><code>render()</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td>ErrorBoundary node in src/components/ErrorBoundary.tsx.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>State</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>State node in src/components/ErrorBoundary.tsx.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>.componentDidCatch()</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>ErrorBoundary</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>.componentDidCatch() node in src/components/ErrorBoundary.tsx.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>.getDerivedStateFromError()</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>ErrorBoundary</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>.getDerivedStateFromError() node in src/components/ErrorBoundary.tsx.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>.render()</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>ErrorBoundary</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td>No direct outbound edge</td>
+  <td>.render() node in src/components/ErrorBoundary.tsx.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>ErrorBoundary.tsx</code><br><small style="color:var(--muted)">src/components/ErrorBoundary.tsx</small></td>
+  <td><span class="tag tag-hook">UI</span></td>
+  <td><code>App.tsx</code><br><small style="color:var(--muted)">src/App.tsx</small></td>
+  <td><code>react</code><br><small style="color:var(--muted)">package.json</small></td>
+  <td>Module file in src/components/ErrorBoundary.tsx.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>src/components/ErrorBoundary.tsx</code></td><td>6 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: method x3, contains x2. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 9. Swjs Public Assets ====== -->
+<h2 id="swjs-public-assets">9. Swjs Public Assets</h2>
+<p>Swjs Public Assets groups implementation around swjs, public, assets, mostly in public/sw.js. This section covers 2 nodes and 1 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Swjs Public Assets (2 nodes, 1 edges)
+    public_sw_be7f98ee("sw.js")
+    public_sw_assets_a003903a("ASSETS<br/><small>public/sw.js</small>")
+    public_sw_be7f98ee -->|contains| public_sw_assets_a003903a
+    class public_sw_be7f98ee module;
+    class public_sw_assets_a003903a async;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>sw.js</code><br><small style="color:var(--muted)">public/sw.js</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>sw.js node in public/sw.js.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>ASSETS</code><br><small style="color:var(--muted)">public/sw.js</small></td>
+  <td><span class="tag tag-async">Async</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>ASSETS node in public/sw.js.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>public/sw.js</code></td><td>2 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<h2 id="stats">Project Statistics</h2>
+
+<div class="grid">
+  <div class="card">
+    <h4>Graph</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><td>Nodes</td><td>177</td></tr>
+      <tr><td>Edges</td><td>361</td></tr>
+      <tr><td>Hyperedges</td><td>0</td></tr>
+      <tr><td>Communities</td><td>12</td></tr>
+      <tr><td>Documented Sections</td><td>8</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Edge Confidence</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><td>EXTRACTED</td><td>361</td></tr>
+      <tr><td>INFERRED</td><td>0</td></tr>
+      <tr><td>AMBIGUOUS</td><td>0</td></tr>
+    </table>
+  </div>
+</div>
+
+<div style="text-align:center; padding:40px 0; color: var(--muted); font-size:0.9rem;">
+  <p>aura-chat-main — Architecture Documentation</p>
+  <p>Generated: 2026-10-09 11:45 UTC · graphify callflow-html</p>
+</div>
+
+</div><!-- .container -->
+
+<script>
+(function () {
+  const mermaidConfig = {
+    startOnLoad: false,
+    theme: 'dark',
+    securityLevel: 'loose',
+    flowchart: { htmlLabels: true, useMaxWidth: true },
+    themeVariables: {
+      primaryColor: '#1e293b',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#38bdf8',
+      secondaryColor: '#0f172a',
+      tertiaryColor: '#334155',
+      lineColor: '#64748b',
+      textColor: '#e2e8f0',
+    }
+  };
+
+  mermaid.initialize(mermaidConfig);
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function enhanceMermaidDiagrams() {
+    document.querySelectorAll('.mermaid').forEach((container) => {
+      if (container.dataset.zoomReady === 'true') return;
+      const svg = container.querySelector('svg');
+      if (!svg) return;
+
+      container.dataset.zoomReady = 'true';
+      container.classList.add('is-enhanced');
+
+      const viewport = document.createElement('div');
+      viewport.className = 'mermaid-viewport';
+      svg.parentNode.insertBefore(viewport, svg);
+      viewport.appendChild(svg);
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'mermaid-toolbar';
+      toolbar.innerHTML = [
+        '<button type="button" data-action="zoom-out" title="Zoom out">-</button>',
+        '<span class="zoom-level" data-role="level">100%</span>',
+        '<button type="button" data-action="zoom-in" title="Zoom in">+</button>',
+        '<button type="button" data-action="fit" title="Fit width">Fit</button>',
+        '<button type="button" data-action="reset" title="Reset view">Reset</button>'
+      ].join('');
+      container.insertBefore(toolbar, viewport);
+
+      const state = { scale: 1, x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+      const level = toolbar.querySelector('[data-role="level"]');
+
+      function applyTransform() {
+        svg.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+        level.textContent = `${Math.round(state.scale * 100)}%`;
+      }
+
+      function zoomBy(delta) {
+        state.scale = clamp(state.scale + delta, 0.25, 3);
+        applyTransform();
+      }
+
+      function reset() {
+        state.scale = 1;
+        state.x = 0;
+        state.y = 0;
+        applyTransform();
+      }
+
+      function fitWidth() {
+        const rawWidth = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width
+          ? svg.viewBox.baseVal.width
+          : svg.getBoundingClientRect().width / state.scale;
+        if (!rawWidth) {
+          reset();
+          return;
+        }
+        state.scale = clamp((viewport.clientWidth - 48) / rawWidth, 0.25, 1.4);
+        state.x = 0;
+        state.y = 0;
+        applyTransform();
+      }
+
+      toolbar.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === 'zoom-in') zoomBy(0.15);
+        if (action === 'zoom-out') zoomBy(-0.15);
+        if (action === 'fit') fitWidth();
+        if (action === 'reset') reset();
+      });
+
+      viewport.addEventListener('wheel', (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
+      }, { passive: false });
+
+      viewport.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        state.dragging = true;
+        state.startX = event.clientX;
+        state.startY = event.clientY;
+        state.originX = state.x;
+        state.originY = state.y;
+        viewport.classList.add('is-dragging');
+        viewport.setPointerCapture(event.pointerId);
+      });
+
+      viewport.addEventListener('pointermove', (event) => {
+        if (!state.dragging) return;
+        state.x = state.originX + event.clientX - state.startX;
+        state.y = state.originY + event.clientY - state.startY;
+        applyTransform();
+      });
+
+      function endDrag(event) {
+        if (!state.dragging) return;
+        state.dragging = false;
+        viewport.classList.remove('is-dragging');
+        if (viewport.hasPointerCapture(event.pointerId)) {
+          viewport.releasePointerCapture(event.pointerId);
+        }
+      }
+
+      viewport.addEventListener('pointerup', endDrag);
+      viewport.addEventListener('pointercancel', endDrag);
+      applyTransform();
+    });
+  }
+
+  function renderMermaid() {
+    const result = mermaid.run
+      ? mermaid.run({ querySelector: '.mermaid' })
+      : Promise.resolve();
+    Promise.resolve(result)
+      .then(enhanceMermaidDiagrams)
+      .catch((error) => {
+        console.error('Mermaid render failed:', error);
+        enhanceMermaidDiagrams();
+      });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderMermaid);
+  } else {
+    renderMermaid();
+  }
+})();
+</script>
+
+</body>
+</html>

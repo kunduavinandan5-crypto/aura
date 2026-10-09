@@ -1,0 +1,14 @@
+# Aura AI Study Assistant
+
+> Aura is a free, installable web app (PWA) that helps school and college students study. Students can ask questions by text or voice, upload or capture a photo of a problem to get a step-by-step solution, and keep their chat history synced across devices.
+
+## Key facts
+- Audience: students in school and college (e.g. Class 9-12, undergraduate).
+- Input: typed questions, voice questions (browser speech recognition), photos of problems.
+- Output: structured, step-by-step explanations with follow-up question suggestions; answers can be read aloud.
+- Accounts: email magic-link or Google sign-in, or guest mode. Chats are private to each user.
+- Privacy: users can delete all chat history and search records from Settings at any time.
+- Install: open {{SITE_URL}}/ in a mobile browser and choose "Add to Home Screen".
+
+## Links
+- [Aura web app]({{SITE_URL}}/)

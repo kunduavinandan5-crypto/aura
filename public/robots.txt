@@ -1,0 +1,25 @@
+# Aura is open to search engines and AI answer engines. The Sitemap line is appended at build time.
+User-agent: *
+Allow: /
+
+# AI search / answer engines (explicitly welcome)
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /

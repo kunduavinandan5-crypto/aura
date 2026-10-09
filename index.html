@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+  <title>Aura AI Study Assistant | Step-by-Step Homework Help by Text, Photo &amp; Voice</title>
+  <meta name="description"
+    content="Aura is an AI study assistant for students. Ask by text or voice, snap a photo of a problem for step-by-step solutions, and sync your chats across devices." />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+  <meta name="author" content="Syntrix" />
+  <meta name="application-name" content="Aura" />
+
+  <!-- Icons & PWA -->
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#07080e" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Aura" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Open Graph / Twitter (og:url, og:image and canonical are injected at build time from VITE_SITE_URL) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Aura" />
+  <meta property="og:title" content="Aura AI Study Assistant" />
+  <meta property="og:description"
+    content="Step-by-step help with homework by text, photo and voice. Free, installable, synced across devices." />
+  <meta property="og:locale" content="en_US" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Aura AI Study Assistant" />
+  <meta name="twitter:description"
+    content="Step-by-step help with homework by text, photo and voice." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+</head>
+
+<body class="selection:bg-cyan-500/20 selection:text-cyan-400 bg-[#07080e] overscroll-none">
+  <!--
+    Crawler- and no-JS-readable content. React replaces everything inside #root on mount.
+    Keep the FAQ text in sync with the FAQPage JSON-LD in vite.config.ts.
+  -->
+  <div id="root">
+    <main style="max-width:42rem;margin:0 auto;padding:2rem 1.25rem;font-family:system-ui,sans-serif;color:#e4e6ee;background:#07080e;min-height:100vh">
+      <h1>Aura AI Study Assistant</h1>
+      <p>Aura is an AI study assistant for school and college students. Ask questions by text or voice, snap a photo of a
+        problem for step-by-step help, and keep your chats synced across devices.</p>
+      <h2>Frequently asked questions</h2>
+      <h3>What is Aura?</h3>
+      <p>Aura is an AI study assistant for school and college students. It explains concepts step by step, solves
+        problems from photos, answers spoken questions, and keeps your chats synced across devices.</p>
+      <h3>Can Aura solve a problem from a photo?</h3>
+      <p>Yes. Upload or capture a photo of a math, science or diagram question and Aura walks through the solution step
+        by step.</p>
+      <h3>Does Aura support voice questions?</h3>
+      <p>Yes. Tap the microphone to ask a question out loud in browsers that support speech recognition, and have
+        answers read back to you.</p>
+      <h3>Is my study data private?</h3>
+      <p>Your chats are stored in your own account and protected with per-user access rules. You can delete all chat
+        history and search records from Settings at any time.</p>
+      <h3>Can I install Aura on my phone?</h3>
+      <p>Yes. Aura is a progressive web app: use "Add to Home Screen" in your mobile browser to install it like a native
+        app.</p>
+      <noscript>
+        <p><strong>Aura needs JavaScript enabled to run.</strong></p>
+      </noscript>
+    </main>
+  </div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
