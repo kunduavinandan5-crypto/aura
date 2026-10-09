@@ -7,9 +7,11 @@ interface PhoneLoginProps {
   cloudEnabled: boolean;
   /** Resolves true when the request succeeded (magic link sent / local session started). */
   onEmail: (email: string) => Promise<boolean>;
+  /** When provided, shows a "Try the demo" button (device-only session, no account). */
+  onDemo?: () => void;
 }
 
-export const PhoneLogin: React.FC<PhoneLoginProps> = ({ cloudEnabled, onEmail }) => {
+export const PhoneLogin: React.FC<PhoneLoginProps> = ({ cloudEnabled, onEmail, onDemo }) => {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
@@ -98,6 +100,15 @@ export const PhoneLogin: React.FC<PhoneLoginProps> = ({ cloudEnabled, onEmail })
             >
               {busy ? 'Please wait…' : cloudEnabled ? 'Email me a sign-in link' : 'Log in'}
             </button>
+            {onDemo && (
+              <button
+                type="button"
+                onClick={onDemo}
+                className="w-full rounded-full border border-white/10 bg-[#161822] py-3 text-xs font-semibold text-zinc-200 transition-all hover:bg-white/10 active:scale-[0.98]"
+              >
+                Try the demo
+              </button>
+            )}
           </form>
         )}
       </div>

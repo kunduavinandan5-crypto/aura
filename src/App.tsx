@@ -80,6 +80,11 @@ export const App: React.FC = () => {
     setUser(profile);
   }, []);
 
+  /** Temporary demo: a device-only session. It has no Supabase session, so nothing syncs to the cloud. */
+  const handleDemo = useCallback(() => {
+    startLocalSession({ id: newId('demo'), name: 'Demo Student', email: '', studentClass: 'Class 12', subject: 'Science', isGuest: true });
+  }, [startLocalSession]);
+
   const handleEmail = useCallback(
     async (email: string) => {
       if (!isSupabaseConfigured) {
@@ -118,7 +123,11 @@ export const App: React.FC = () => {
       <div className="flex h-dvh w-screen items-center justify-center overflow-hidden bg-[#07080e]">
         {toaster}
         <main className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-[#07080e]">
-          <PhoneLogin cloudEnabled={isSupabaseConfigured} onEmail={handleEmail} />
+          <PhoneLogin
+            cloudEnabled={isSupabaseConfigured}
+            onEmail={handleEmail}
+            onDemo={import.meta.env.VITE_ENABLE_DEMO === 'false' ? undefined : handleDemo}
+          />
         </main>
       </div>
     );

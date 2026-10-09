@@ -39,9 +39,13 @@ export async function signInWithEmailLink(email: string): Promise<string | null>
   if (!supabase) return 'Cloud sign-in is not configured.';
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.origin },
+    // Login only: existing users can sign in, new accounts are not created from the login screen.
+    options: { emailRedirectTo: window.location.origin, shouldCreateUser: false },
   });
-  return error ? error.message : null;
+  if (!error) return null;
+  return /signups? not allowed|not found/i.test(error.message)
+    ? 'No account found for this email. Ask your administrator for access.'
+    : error.message;
 }
 
 export async function signOutRemote(): Promise<void> {
