@@ -9,9 +9,7 @@ import { newId } from './lib/id';
 import {
   fetchUserProfile,
   isSupabaseConfigured,
-  signInAsGuest,
   signInWithEmailLink,
-  signInWithGoogle,
   signOutRemote,
   supabase,
   syncUserProfile,
@@ -82,18 +80,13 @@ export const App: React.FC = () => {
     setUser(profile);
   }, []);
 
-  const handleGoogle = useCallback(async () => {
-    const error = await signInWithGoogle();
-    if (error) toast.error(error);
-  }, []);
-
   const handleEmail = useCallback(
-    async (profile: Pick<UserProfile, 'name' | 'email' | 'studentClass' | 'subject'>) => {
+    async (email: string) => {
       if (!isSupabaseConfigured) {
-        startLocalSession({ id: newId('local'), ...profile, isGuest: false });
+        startLocalSession({ id: newId('local'), name: email.split('@')[0] || 'Scholar', email, isGuest: false });
         return true;
       }
-      const error = await signInWithEmailLink(profile);
+      const error = await signInWithEmailLink(email);
       if (error) {
         toast.error(error);
         return false;
@@ -103,15 +96,6 @@ export const App: React.FC = () => {
     },
     [startLocalSession]
   );
-
-  const handleGuest = useCallback(async () => {
-    if (isSupabaseConfigured) {
-      const error = await signInAsGuest();
-      if (!error) return;
-      toast.info('Guest cloud sync is unavailable; continuing on this device only.');
-    }
-    startLocalSession({ id: newId('guest'), name: 'Guest Scholar', email: '', isGuest: true });
-  }, [startLocalSession]);
 
   const handleSignOut = useCallback(async () => {
     await signOutRemote();
@@ -134,12 +118,7 @@ export const App: React.FC = () => {
       <div className="flex h-dvh w-screen items-center justify-center overflow-hidden bg-[#07080e]">
         {toaster}
         <main className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-[#07080e]">
-          <PhoneLogin
-            cloudEnabled={isSupabaseConfigured}
-            onGoogle={handleGoogle}
-            onEmail={handleEmail}
-            onGuest={handleGuest}
-          />
+          <PhoneLogin cloudEnabled={isSupabaseConfigured} onEmail={handleEmail} />
         </main>
       </div>
     );

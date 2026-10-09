@@ -23,7 +23,7 @@ Without Supabase variables the app runs in local-only mode (profile and chats st
 ## Supabase
 
 1. Create a project and run [supabase_schema.sql](supabase_schema.sql) in the SQL editor (idempotent; replaces the old open policies with per-user RLS).
-2. Authentication: enable Email, optionally Google, and enable **Anonymous sign-ins** for guest mode. Add your production URL to Site URL / Redirect URLs.
+2. Authentication: enable Email (magic link; login is email-only). Add your production URL to Site URL / Redirect URLs.
 3. Verify: `npm run check:supabase` checks reachability, key role, and that the anon role cannot read or write any table.
 
 ## AI backend contract

@@ -27,7 +27,7 @@ export function userToProfile(user: User, row?: Partial<UserProfile> | null): Us
   return {
     id: user.id,
     email: row?.email || user.email || '',
-    name: row?.name || meta.name || meta.full_name || (user.is_anonymous ? 'Guest Scholar' : 'Scholar'),
+    name: row?.name || meta.name || meta.full_name || user.email?.split('@')[0] || 'Scholar',
     studentClass: row?.studentClass || meta.student_class || '',
     subject: row?.subject || meta.subject || '',
     avatarUrl: row?.avatarUrl || meta.avatar_url || meta.picture || '',
@@ -35,36 +35,12 @@ export function userToProfile(user: User, row?: Partial<UserProfile> | null): Us
   };
 }
 
-export async function signInWithGoogle(): Promise<string | null> {
-  if (!supabase) return 'Cloud sign-in is not configured.';
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: window.location.origin },
-  });
-  return error ? error.message : null;
-}
-
-export async function signInWithEmailLink(
-  profile: Pick<UserProfile, 'name' | 'email' | 'studentClass' | 'subject'>
-): Promise<string | null> {
+export async function signInWithEmailLink(email: string): Promise<string | null> {
   if (!supabase) return 'Cloud sign-in is not configured.';
   const { error } = await supabase.auth.signInWithOtp({
-    email: profile.email,
-    options: {
-      emailRedirectTo: window.location.origin,
-      data: {
-        name: profile.name,
-        student_class: profile.studentClass || '',
-        subject: profile.subject || '',
-      },
-    },
+    email,
+    options: { emailRedirectTo: window.location.origin },
   });
-  return error ? error.message : null;
-}
-
-export async function signInAsGuest(): Promise<string | null> {
-  if (!supabase) return 'Cloud sign-in is not configured.';
-  const { error } = await supabase.auth.signInAnonymously();
   return error ? error.message : null;
 }
 

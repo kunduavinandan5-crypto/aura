@@ -5,8 +5,7 @@
 -- Safe to re-run (idempotent).
 --
 -- Prerequisites (Dashboard > Authentication):
---   * Providers: enable Email (magic link) and, optionally, Google.
---   * Enable "Allow anonymous sign-ins" if you want the "Continue as guest" button.
+--   * Providers: enable Email (magic link). The app signs in by email only.
 --   * URL Configuration: set Site URL + add your production URL to Redirect URLs.
 -- ==============================================================================
 
