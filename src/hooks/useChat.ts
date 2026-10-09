@@ -17,7 +17,8 @@ export function useChat(user: UserProfile) {
   const [subjectId, setSubjectIdState] = useState(loadSubjectId);
 
   const setSubjectId = useCallback((id: string) => {
-    const next = getSubject(id).id;
+    const next = getSubject(id)?.id;
+    if (!next) return;
     setSubjectIdState(next);
     saveSubjectId(next);
   }, []);
@@ -41,9 +42,14 @@ export function useChat(user: UserProfile) {
     async (text: string, image?: string): Promise<string | null> => {
       const prompt = text.trim() || (image ? 'Please analyze and explain this photo.' : '');
       if (!prompt || busyRef.current) return null;
-      busyRef.current = true;
 
       const subject = getSubject(subjectId);
+      if (!subject) {
+        toast.error('Please select a subject before asking a question.');
+        return null;
+      }
+      busyRef.current = true;
+
       storage.recordSearch(prompt, user.id, subject.label);
 
       const now = new Date().toISOString();

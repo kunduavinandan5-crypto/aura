@@ -226,6 +226,10 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     const msgText = (text !== undefined ? text : input).trim();
     const image = attachedImage || undefined;
     if ((!msgText && !image) || isGenerating) return;
+    if (!subjectId) {
+      toast.error('Please select a subject before asking a question.');
+      return;
+    }
 
     setInput('');
     setAttachedImage(null);
@@ -454,20 +458,20 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
               <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
                 {[
                   {
-                    title: 'Quantum Physics',
-                    query: 'Explain quantum superposition and entanglement using an intuitive analogy.',
-                  },
-                  {
-                    title: 'Calculus Integration',
-                    query: 'Walk me step-by-step through integration by parts with an example.',
-                  },
-                  {
-                    title: 'Solve Math / Science Photo',
-                    query: 'Upload a photo or capture a diagram with the camera to get instant step-by-step solutions.',
+                    title: 'Explain key concepts',
+                    query: 'Explain the most important concepts of this subject with simple examples.',
                   },
                   {
                     title: 'Exam Practice Quiz',
-                    query: 'Give me 3 practice multiple-choice questions on data structures.',
+                    query: 'Give me 3 practice multiple-choice questions for exam revision.',
+                  },
+                  {
+                    title: 'Numerical / Problem Help',
+                    query: 'Walk me step by step through solving a typical exam numerical.',
+                  },
+                  {
+                    title: 'Quick Revision Notes',
+                    query: 'Summarize the top points I should remember for my exam.',
                   },
                 ].map((item, idx) => (
                   <button
@@ -644,7 +648,16 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
             ) : (
               /* Normal input with Upload Photo + Capture Photo */
               <div className="flex items-center gap-2 rounded-full border border-white/12 bg-[#1a1c28]/95 p-2 pl-3 shadow-2xl focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/15 transition-all">
-                <SubjectSelect value={subjectId} onChange={setSubjectId} disabled={isGenerating} />
+                {/* Capture Photo from Camera */}
+                <button
+                  type="button"
+                  onClick={() => setIsCameraOpen(true)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-cyan-400 transition-colors"
+                  title="Capture Photo with Camera"
+                  aria-label="Capture photo with camera"
+                >
+                  <Camera className="h-4 w-4" />
+                </button>
 
                 {/* Upload Photo from file */}
                 <button
@@ -652,19 +665,12 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                   onClick={() => fileInputRef.current?.click()}
                   className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-blue-400 transition-colors"
                   title="Upload Photo / Image"
+                  aria-label="Upload photo"
                 >
                   <ImageIcon className="h-4 w-4" />
                 </button>
 
-                {/* Capture Photo from Camera */}
-                <button
-                  type="button"
-                  onClick={() => setIsCameraOpen(true)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-cyan-400 transition-colors"
-                  title="Capture Photo with Camera"
-                >
-                  <Camera className="h-4 w-4" />
-                </button>
+                <SubjectSelect value={subjectId} onChange={setSubjectId} disabled={isGenerating} />
 
                 <input
                   ref={textareaRef}

@@ -16,6 +16,7 @@ const USER_KEY = 'aura_user_profile_v2';
 /** Keys written by older builds; wiped on sign-out so no student data lingers on shared devices. */
 const LEGACY_KEYS = [
   'aura_subject_v1',
+  'aura_subject_v2',
   'aura_chat_threads_v1',
   'aura_edu_rag_documents_v1',
   'aura_user_profile_v1',

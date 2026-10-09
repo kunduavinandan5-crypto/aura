@@ -164,6 +164,10 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
 
   const handleSend = () => {
     if ((!input.trim() && !attachedImage) || isGenerating) return;
+    if (!subjectId) {
+      toast.error('Please select a subject before asking a question.');
+      return;
+    }
     onSendMessage(input.trim(), attachedImage || undefined);
     setInput('');
     setAttachedImage(null);
@@ -300,9 +304,9 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
               <div className="mt-6 flex flex-wrap justify-center gap-2 max-w-xs anim-fade-up anim-delay-300">
                 {[
                   'Explain key concepts',
-                  'Solve math from photo',
                   'Quiz me for exam',
-                  'Step-by-step calculus',
+                  'Step-by-step numerical',
+                  'Quick revision notes',
                 ].map((text, idx) => (
                   <button
                     key={idx}
@@ -404,12 +408,6 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           </div>
         )}
 
-        {!isVoiceActive && (
-          <div className="mb-2 flex">
-            <SubjectSelect value={subjectId} onChange={onSubjectChange} disabled={isGenerating} />
-          </div>
-        )}
-
         {isVoiceActive ? (
           /* ═══ GEMINI-STYLE INLINE VOICE BAR ═══ */
           <div className="flex items-center gap-3 rounded-full border border-white/12 bg-[#1a1c28]/95 px-4 py-3 shadow-2xl backdrop-blur-xl anim-fade-up">
@@ -449,25 +447,29 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         ) : (
           /* ═══ NORMAL TEXT INPUT BAR WITH PHOTO UPLOAD & CAPTURE ═══ */
           <div className="flex items-center gap-2 rounded-full border border-white/12 bg-[#1a1c28]/95 p-1.5 pl-3 shadow-2xl backdrop-blur-xl focus-within:border-blue-500/40 transition-all">
-            {/* Upload Photo Button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-blue-400 transition-colors"
-              title="Upload photo"
-            >
-              <ImageIcon className="h-4 w-4" />
-            </button>
-
             {/* Capture Photo Button */}
             <button
               type="button"
               onClick={() => setIsCameraOpen(true)}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-cyan-400 transition-colors"
               title="Capture photo"
+              aria-label="Capture photo with camera"
             >
               <Camera className="h-4 w-4" />
             </button>
+
+            {/* Upload Photo Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-blue-400 transition-colors"
+              title="Upload photo"
+              aria-label="Upload photo"
+            >
+              <ImageIcon className="h-4 w-4" />
+            </button>
+
+            <SubjectSelect value={subjectId} onChange={onSubjectChange} disabled={isGenerating} />
 
             <input
               type="text"
