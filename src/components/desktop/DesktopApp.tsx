@@ -1,23 +1,23 @@
 ﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  ArrowUp,
   Camera,
   Check,
   Copy,
   Image as ImageIcon,
-  Menu,
+  LogOut,
   MessageSquare,
   Mic,
-  Plus,
-  Send,
+  PanelLeft,
+  Search,
   Settings,
   Sparkles,
   Square,
-  Trash2,
+  SquarePen,
   Volume2,
   VolumeX,
   X,
 } from 'lucide-react';
-import { PhoneOrb } from '@/phone/PhoneOrb';
 import { SettingsModal } from '../settings/SettingsModal';
 import { CameraCaptureModal } from '../camera/CameraCaptureModal';
 import { UserProfile } from '@/types';
@@ -34,15 +34,15 @@ interface DesktopAppProps {
   onUpdateUser: (u: UserProfile) => void;
 }
 
-/* ── Inline waveform bars (desktop) ── */
+/* ── Inline waveform bars (voice input) ── */
 const VoiceWaveform: React.FC<{ isActive: boolean }> = ({ isActive }) => {
   const bars = [3, 5, 9, 14, 10, 7, 13, 9, 6, 10, 14, 8, 5, 9, 13, 7, 4, 8, 12, 6];
   return (
-    <div className="flex items-center gap-[3px] h-7">
+    <div className="flex h-7 items-center gap-[3px]">
       {bars.map((h, i) => (
         <div
           key={i}
-          className="rounded-full bg-zinc-400"
+          className="rounded-full bg-[#a8c7fa]"
           style={{
             width: 3,
             height: isActive ? `${h}px` : '3px',
@@ -59,6 +59,9 @@ const VoiceWaveform: React.FC<{ isActive: boolean }> = ({ isActive }) => {
   );
 };
 
+const iconBtn =
+  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#c4c7c5] transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40';
+
 export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdateUser }) => {
   const {
     threads,
@@ -70,6 +73,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     subjectId,
     setSubjectId,
     sendMessage,
+    startNewChat,
     clearAllChats,
     reloadFromStorage,
   } = useChat(user);
@@ -79,6 +83,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   /* ── Inline voice state ── */
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -260,456 +266,364 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     }
   };
 
-  return (
-    <div className="flex h-full w-full overflow-hidden bg-[#07080e] text-white select-none relative">
-      {/* Hidden file input for uploading photos */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="hidden"
-      />
 
-      {/* Ambient background glow */}
-      <div className="absolute -top-40 left-1/4 h-96 w-96 rounded-full bg-blue-600/10 blur-[140px] pointer-events-none" />
-      <div className="absolute -bottom-40 right-1/4 h-96 w-96 rounded-full bg-violet-600/10 blur-[140px] pointer-events-none" />
+  const firstName = user.name.trim().split(/\s+/)[0] || 'there';
+  const hasInput = Boolean(input.trim() || attachedImage);
+  const visibleThreads = threads.filter((t) => t.title.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+  const isEmpty = messages.length === 0 && !isVoiceActive;
+
+  /* ── Composer (shared by the centered empty state and the bottom bar) ── */
+  const composer = (
+    <div className="mx-auto w-full max-w-3xl space-y-2">
+      {attachedImage && !isVoiceActive && (
+        <div className="flex w-fit items-center gap-3 rounded-2xl bg-[#1e1f20] p-2 pr-3">
+          <img src={attachedImage} alt="Attached preview" className="h-12 w-12 rounded-xl object-cover" />
+          <span className="text-xs text-[#c4c7c5]">Photo attached</span>
+          <button onClick={() => setAttachedImage(null)} className={iconBtn} aria-label="Remove photo">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {isVoiceActive ? (
+        <div className="flex items-center gap-2 rounded-full bg-[#1e1f20] px-3 py-2.5">
+          <button onClick={stopVoice} className={iconBtn} aria-label="Cancel voice input">
+            <X className="h-5 w-5" />
+          </button>
+          <div className="flex min-w-0 flex-1 items-center justify-center px-2">
+            {voiceTranscript ? (
+              <p className="truncate text-sm text-[#e3e3e3]">{voiceTranscript}</p>
+            ) : (
+              <VoiceWaveform isActive={isListening} />
+            )}
+          </div>
+          {voiceTranscript ? (
+            <button
+              onClick={sendVoice}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e3e3e3] text-[#131314] transition-transform hover:bg-white active:scale-95"
+              aria-label="Send question"
+            >
+              <ArrowUp className="h-5 w-5" />
+            </button>
+          ) : (
+            <button
+              onClick={isListening ? stopVoice : startVoice}
+              className={iconBtn}
+              aria-label={isListening ? 'Stop listening' : 'Start listening'}
+            >
+              {isListening ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-5 w-5" />}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 rounded-full bg-[#1e1f20] py-2 pr-2.5 pl-3 transition-shadow focus-within:shadow-[0_0_0_1px_rgba(168,199,250,0.45)]">
+          <button
+            type="button"
+            onClick={() => setIsCameraOpen(true)}
+            className={iconBtn}
+            title="Capture photo with camera"
+            aria-label="Capture photo with camera"
+          >
+            <Camera className="h-[18px] w-[18px]" />
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={iconBtn}
+            title="Upload photo"
+            aria-label="Upload photo"
+          >
+            <ImageIcon className="h-[18px] w-[18px]" />
+          </button>
+          <SubjectSelect value={subjectId} onChange={setSubjectId} disabled={isGenerating} className="mx-1" />
+
+          <input
+            ref={textareaRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSendMessage(input)}
+            aria-label="Ask Aura a question"
+            placeholder="Ask Aura"
+            className="min-w-0 flex-1 bg-transparent px-2 py-2 text-base text-[#e3e3e3] placeholder-[#9aa0a6] focus:outline-none"
+          />
+
+          {hasInput ? (
+            <button
+              onClick={() => handleSendMessage(input)}
+              disabled={isGenerating}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e3e3e3] text-[#131314] transition-transform hover:bg-white active:scale-95 disabled:opacity-50"
+              aria-label="Send"
+            >
+              <ArrowUp className="h-5 w-5" />
+            </button>
+          ) : (
+            <button onClick={startVoice} className={iconBtn} title="Voice input" aria-label="Voice input">
+              <Mic className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="relative flex h-full w-full overflow-hidden bg-[#131314] text-[#e3e3e3]">
+      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
 
       {/* ── Sidebar ── */}
       <aside
-        className={`flex h-full flex-col justify-between border-r border-white/[0.06] bg-[#0b0d16]/95 backdrop-blur-2xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-20 ${
-          isSidebarOpen ? 'w-64 p-4' : 'w-0 overflow-hidden border-none p-0'
+        className={`z-20 flex h-full shrink-0 flex-col bg-[#1b1c1d] transition-[width] duration-300 ease-out ${
+          isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
         }`}
+        aria-label="Conversations"
       >
-        <div className="flex flex-col flex-1 min-h-0 space-y-4 overflow-y-auto">
-          <div className="flex items-center justify-between px-1">
-            <div
-              className="flex items-center gap-2 cursor-pointer group"
-              onClick={() => setActiveThreadId(null)}
-            >
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 transition-transform group-hover:scale-105">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <span className="text-base font-bold tracking-tight text-white font-display">
-                Aura AI
-              </span>
-            </div>
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white transition-colors"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-          </div>
-
-          <button
-            onClick={() => setActiveThreadId(null)}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:brightness-105 active:scale-[0.98]"
-          >
-            <Plus className="h-4 w-4" /> <span>New Conversation</span>
+        <div className="flex h-16 shrink-0 items-center justify-between px-4">
+          <button onClick={startNewChat} className="flex items-center gap-2.5" aria-label="Aura home">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#4285f4] via-[#9b72cb] to-[#d96570]">
+              <Sparkles className="h-4 w-4 text-white" />
+            </span>
+            <span className="text-lg font-medium text-white">Aura</span>
           </button>
-
-          <div className="space-y-1.5 pt-2 flex-1 min-h-0 flex flex-col">
-            <div className="px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-              RECENT CHATS
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-              {threads.length === 0 ? (
-                <div className="px-2 py-6 text-center text-xs text-zinc-600">
-                  No conversations yet
-                </div>
-              ) : (
-                threads.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setActiveThreadId(t.id)}
-                    className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs transition-all ${
-                      activeThreadId === t.id
-                        ? 'bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30'
-                        : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    <MessageSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                    <span className="truncate">{t.title}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className={iconBtn} aria-label="Collapse sidebar">
+            <PanelLeft className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="border-t border-white/[0.06] pt-3 space-y-1">
+        <nav className="space-y-1 px-3">
           <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs text-zinc-400 hover:bg-white/5 hover:text-white transition-all"
+            onClick={startNewChat}
+            className={`flex w-full items-center gap-3 rounded-full px-3.5 py-2.5 text-sm transition-colors ${
+              activeThreadId === null ? 'bg-[#282a2c] text-white' : 'text-[#c4c7c5] hover:bg-white/5'
+            }`}
           >
-            <Settings className="h-4 w-4" />
-            <span>Settings & Profile</span>
+            <SquarePen className="h-[18px] w-[18px]" />
+            <span>New chat</span>
           </button>
-          <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-zinc-500">
-            <span className="truncate font-medium text-zinc-400">{user.name}</span>
-            <button onClick={onSignOut} className="text-red-400 hover:underline">
-              Sign out
-            </button>
-          </div>
-        </div>
-      </aside>
+          <button
+            onClick={() => {
+              setIsSearchOpen((v) => !v);
+              setSearchQuery('');
+            }}
+            className="flex w-full items-center gap-3 rounded-full px-3.5 py-2.5 text-sm text-[#c4c7c5] transition-colors hover:bg-white/5"
+          >
+            <Search className="h-[18px] w-[18px]" />
+            <span>Search chats</span>
+          </button>
+          {isSearchOpen && (
+            <input
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search your chats"
+              aria-label="Search chats"
+              className="w-full rounded-full bg-[#282a2c] px-4 py-2 text-sm text-white placeholder-[#9aa0a6] focus:outline-none"
+            />
+          )}
+        </nav>
 
-      {/* ── Main Canvas ── */}
-      <main className="flex flex-1 min-h-0 flex-col overflow-hidden bg-[#07080e] relative z-10">
-        {/* Top Header */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-6">
-          <div className="flex items-center gap-3">
-            {!isSidebarOpen && (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white transition-colors"
-              >
-                <Menu className="h-4 w-4" />
-              </button>
-            )}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-zinc-400">
-                {activeThread?.title || 'New Conversation'}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setIsMuted(!isMuted);
-                toast.info(isMuted ? 'Audio enabled' : 'Audio muted');
-              }}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/5 hover:text-white transition-colors"
-              title={isMuted ? 'Unmute voice answers' : 'Mute voice answers'}
-            >
-              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </button>
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/5 hover:text-white transition-colors"
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-          </div>
-        </header>
-
-        {/* ── Chat Messages or Voice View ── */}
-        <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-6">
-          {isVoiceActive ? (
-            /* Gemini-style inline listening state on Desktop */
-            <div className="flex h-full flex-col items-center justify-center text-center anim-fade-in">
-              <div className="absolute inset-0 bg-gradient-to-t from-blue-900/15 via-transparent to-transparent pointer-events-none" />
-
-              <div
-                className="transition-all duration-500 ease-out"
-                style={{ transform: isListening ? 'scale(1.15)' : 'scale(1)' }}
-              >
-                <PhoneOrb type="fluid-wave" size="hero" isListening={isListening} />
-              </div>
-
-              <div className="mt-8 space-y-2 px-6 anim-fade-up">
-                {voiceTranscript ? (
-                  <>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">
-                      Recognized Question
-                    </p>
-                    <p className="text-2xl font-bold text-white max-w-xl mx-auto leading-relaxed">
-                      "{voiceTranscript}"
-                    </p>
-                  </>
-                ) : isListening ? (
-                  <>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">
-                      Listening...
-                    </p>
-                    <p className="text-2xl font-bold text-white">
-                      Hi {user.name.split(' ')[0]}, speak your question
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                      Voice Mode
-                    </p>
-                    <p className="text-2xl font-bold text-white">
-                      Hi {user.name.split(' ')[0]}, what would you like to ask?
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          ) : messages.length === 0 ? (
-            /* Empty state with fluid orb and question suggestions */
-            <div className="flex h-full flex-col items-center justify-center text-center max-w-2xl mx-auto">
-              <div className="anim-float mb-4">
-                <PhoneOrb type="fluid-wave" size="hero" />
-              </div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-white font-display">
-                How can I help you study today?
-              </h1>
-              <p className="mt-2 text-sm text-zinc-400">
-                Ask any question, upload or capture a photo of a problem, or use voice.
-              </p>
-
-              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                {[
-                  {
-                    title: 'Explain key concepts',
-                    query: 'Explain the most important concepts of this subject with simple examples.',
-                  },
-                  {
-                    title: 'Exam Practice Quiz',
-                    query: 'Give me 3 practice multiple-choice questions for exam revision.',
-                  },
-                  {
-                    title: 'Numerical / Problem Help',
-                    query: 'Walk me step by step through solving a typical exam numerical.',
-                  },
-                  {
-                    title: 'Quick Revision Notes',
-                    query: 'Summarize the top points I should remember for my exam.',
-                  },
-                ].map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSendMessage(item.query)}
-                    className="p-3.5 rounded-2xl border border-white/10 bg-white/[0.03] text-left hover:bg-white/[0.08] hover:border-blue-500/40 transition-all duration-300 active:scale-95 group"
-                  >
-                    <p className="text-xs font-semibold text-white group-hover:text-blue-300 transition-colors">
-                      {item.title}
-                    </p>
-                    <p className="text-[11px] text-zinc-400 mt-1 line-clamp-2">{item.query}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
+        <div className="mt-6 min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+          <div className="px-3.5 pb-2 text-sm font-medium text-[#c4c7c5]">Recent</div>
+          {visibleThreads.length === 0 ? (
+            <p className="px-3.5 py-2 text-sm text-[#80868b]">
+              {threads.length === 0 ? 'No conversations yet' : 'No matching chats'}
+            </p>
           ) : (
-            /* Chat stream */
-            <div className="mx-auto max-w-3xl space-y-6">
-              {messages.map((m) => {
-                const isUser = m.role === 'user';
-                return (
-                  <div
-                    key={m.id}
-                    className={`desktop-chat-bubble flex gap-3.5 ${
-                      isUser ? 'justify-end' : 'justify-start'
-                    }`}
-                  >
-                    <div
-                      className={`rounded-2xl px-5 py-4 text-sm leading-relaxed max-w-[85%] ${
-                        isUser
-                          ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 text-white shadow-lg shadow-blue-600/20'
-                          : 'border border-white/10 bg-[#121420]/95 text-zinc-200 shadow-xl backdrop-blur-md'
-                      }`}
-                    >
-                      {/* Uploaded / Captured Image in User Message */}
-                      {m.imageUrl && (
-                        <div className="mb-3 overflow-hidden rounded-xl border border-white/15 bg-black/40">
-                          <img
-                            src={m.imageUrl}
-                            alt="Uploaded question"
-                            className="max-h-72 w-auto max-w-full rounded-xl object-contain cursor-pointer hover:opacity-95 transition-opacity"
-                            onClick={() => window.open(m.imageUrl, '_blank')}
-                          />
-                        </div>
-                      )}
-
-                      <div className="prose-chat break-words text-sm">
-                        <ReactMarkdown>{m.content}</ReactMarkdown>
-                      </div>
-
-                      {m.suggestedFollowups && m.suggestedFollowups.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-white/[0.08] space-y-1.5">
-                          <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-300">
-                            Suggested Follow-ups
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {m.suggestedFollowups.map((f, idx) => (
-                              <button
-                                key={idx}
-                                onClick={() => handleSendMessage(f)}
-                                className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs text-blue-200 hover:bg-blue-500/20 transition-all active:scale-95"
-                              >
-                                {f}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {!isUser && (
-                        <div className="mt-3 flex items-center gap-3 text-xs text-zinc-500 border-t border-white/5 pt-2.5">
-                          <button
-                            onClick={() => copyText(m.content, m.id)}
-                            className="flex items-center gap-1.5 hover:text-white transition-colors"
-                          >
-                            {copiedId === m.id ? (
-                              <>
-                                <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                <span className="text-emerald-400 font-medium">Copied</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3.5 w-3.5" />
-                                <span>Copy</span>
-                              </>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => speakText(m.content)}
-                            className="flex items-center gap-1.5 hover:text-white transition-colors"
-                          >
-                            <Volume2 className="h-3.5 w-3.5" />
-                            <span>Listen</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {isGenerating && (
-                <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 w-fit backdrop-blur-md anim-fade-up">
-                  <span className="text-[11px] text-zinc-400">Aura is thinking</span>
-                  <span className="flex items-center gap-1 text-blue-400">
-                    <span className="gemini-typing-dot" />
-                    <span className="gemini-typing-dot" />
-                    <span className="gemini-typing-dot" />
-                  </span>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+            visibleThreads.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActiveThreadId(t.id)}
+                className={`flex w-full items-center gap-3 rounded-full px-3.5 py-2 text-left text-sm transition-colors ${
+                  activeThreadId === t.id ? 'bg-[#282a2c] text-white' : 'text-[#e3e3e3] hover:bg-white/5'
+                }`}
+              >
+                <MessageSquare className="h-4 w-4 shrink-0 text-[#80868b]" />
+                <span className="truncate">{t.title}</span>
+              </button>
+            ))
           )}
         </div>
 
-        {/* ── Bottom Input / Voice Bar ── */}
-        <div className="border-t border-white/[0.06] bg-[#07080e]/90 p-4 sm:px-12 backdrop-blur-2xl shrink-0">
-          <div className="mx-auto max-w-3xl space-y-2">
-            {/* Image Preview Chip if attached */}
-            {attachedImage && !isVoiceActive && (
-              <div className="flex items-center gap-3 rounded-2xl border border-blue-500/30 bg-blue-950/25 p-2 px-3 w-fit anim-fade-up">
-                <img
-                  src={attachedImage}
-                  alt="Attached preview"
-                  className="h-12 w-12 rounded-lg object-cover border border-white/20 shadow-md"
-                />
-                <div className="text-xs">
-                  <p className="font-semibold text-white">Photo Attached</p>
-                  <p className="text-[10px] text-blue-300">Ready to analyze</p>
-                </div>
-                <button
-                  onClick={() => setAttachedImage(null)}
-                  className="rounded-full p-1 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors ml-2"
-                  title="Remove image"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
-            {isVoiceActive ? (
-              /* Gemini-style inline voice bar */
-              <div className="flex items-center gap-3 rounded-full border border-white/12 bg-[#1a1c28]/95 px-4 py-3 shadow-2xl backdrop-blur-xl anim-fade-up">
-                <button
-                  onClick={stopVoice}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:text-white transition-colors"
-                  title="Cancel"
-                >
-                  <Plus className="h-4 w-4 rotate-45" />
-                </button>
-                <div className="flex-1 flex items-center justify-center">
-                  <VoiceWaveform isActive={isListening} />
-                </div>
-                <button
-                  onClick={voiceTranscript ? sendVoice : stopVoice}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/15"
-                  title="Stop"
-                >
-                  <Square className="h-4 w-4 fill-current" />
-                </button>
-                <button
-                  onClick={voiceTranscript ? sendVoice : startVoice}
-                  disabled={!voiceTranscript && isListening}
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
-                    voiceTranscript
-                      ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110'
-                      : 'bg-blue-600/50 shadow-blue-600/20 cursor-default'
-                  }`}
-                >
-                  <Send className="h-4 w-4 fill-current ml-0.5" />
-                </button>
-              </div>
-            ) : (
-              /* Normal input with Upload Photo + Capture Photo */
-              <div className="flex items-center gap-2 rounded-full border border-white/12 bg-[#1a1c28]/95 p-2 pl-3 shadow-2xl focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/15 transition-all">
-                {/* Capture Photo from Camera */}
-                <button
-                  type="button"
-                  onClick={() => setIsCameraOpen(true)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-cyan-400 transition-colors"
-                  title="Capture Photo with Camera"
-                  aria-label="Capture photo with camera"
-                >
-                  <Camera className="h-4 w-4" />
-                </button>
-
-                {/* Upload Photo from file */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-blue-400 transition-colors"
-                  title="Upload Photo / Image"
-                  aria-label="Upload photo"
-                >
-                  <ImageIcon className="h-4 w-4" />
-                </button>
-
-                <SubjectSelect value={subjectId} onChange={setSubjectId} disabled={isGenerating} />
-
-                <input
-                  ref={textareaRef}
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  aria-label="Ask Aura a question"
-                  onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSendMessage(input)}
-                  placeholder="Ask a question, upload/capture a photo, or use voice..."
-                  className="w-full bg-transparent text-sm text-white placeholder-[#5a6275] focus:outline-none"
-                />
-
-                <button
-                  onClick={
-                    input.trim() || attachedImage ? () => handleSendMessage(input) : startVoice
-                  }
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-indigo-600 to-violet-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-105"
-                  title={input.trim() || attachedImage ? 'Send' : 'Voice mode'}
-                >
-                  {input.trim() || attachedImage ? (
-                    <Send className="h-4 w-4 fill-current ml-0.5" />
-                  ) : (
-                    <Mic className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            )}
+        <div className="flex shrink-0 items-center gap-3 border-t border-white/5 px-4 py-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#3c4043] text-sm font-medium text-white">
+            {firstName.charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-sm font-medium text-white">{user.name}</p>
+            <p className="truncate text-xs text-[#9aa0a6]">{user.isGuest ? 'Demo' : user.email}</p>
           </div>
+          <button onClick={() => setIsSettingsOpen(true)} className={iconBtn} title="Settings" aria-label="Settings">
+            <Settings className="h-[18px] w-[18px]" />
+          </button>
+          <button onClick={onSignOut} className={iconBtn} title="Sign out" aria-label="Sign out">
+            <LogOut className="h-[18px] w-[18px]" />
+          </button>
         </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <main className="relative flex min-w-0 flex-1 flex-col bg-[radial-gradient(ellipse_70%_55%_at_50%_45%,rgba(26,60,140,0.28),transparent_70%)]">
+        <header className="flex h-16 shrink-0 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            {!isSidebarOpen && (
+              <button onClick={() => setIsSidebarOpen(true)} className={iconBtn} aria-label="Open sidebar">
+                <PanelLeft className="h-5 w-5" />
+              </button>
+            )}
+            {activeThread && <span className="truncate text-sm text-[#c4c7c5]">{activeThread.title}</span>}
+          </div>
+          <button
+            onClick={() => {
+              setIsMuted(!isMuted);
+              toast.info(isMuted ? 'Voice answers on' : 'Voice answers muted');
+            }}
+            className={iconBtn}
+            title={isMuted ? 'Unmute voice answers' : 'Mute voice answers'}
+            aria-label={isMuted ? 'Unmute voice answers' : 'Mute voice answers'}
+          >
+            {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+          </button>
+        </header>
+
+        {isEmpty ? (
+          /* Greeting with the composer centered, like a fresh chat */
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 pb-16">
+            <h1 className="mb-9 text-center text-4xl font-normal tracking-tight text-[#e3e3e3] sm:text-5xl">
+              Hi {firstName}, let&rsquo;s get started
+            </h1>
+            <div className="w-full">{composer}</div>
+            <div className="mt-6 flex max-w-3xl flex-wrap justify-center gap-2.5">
+              {[
+                'Explain key concepts',
+                'Quiz me for my exam',
+                'Walk me through a numerical',
+                'Quick revision notes',
+              ].map((text) => (
+                <button
+                  key={text}
+                  onClick={() => handleSendMessage(text)}
+                  className="rounded-full bg-[#1e1f20] px-4 py-2 text-sm text-[#c4c7c5] transition-colors hover:bg-[#282a2c] hover:text-white"
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              {isVoiceActive && messages.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-2xl text-[#c4c7c5]">
+                  {voiceTranscript || (isListening ? 'Listening…' : 'Tap the mic and ask your question')}
+                </div>
+              ) : (
+                <div className="mx-auto max-w-3xl space-y-8 pb-6">
+                  {messages
+                    .filter((m) => m.role === 'user' || m.content)
+                    .map((m) => {
+                    const isUser = m.role === 'user';
+                    return (
+                      <div key={m.id} className="desktop-chat-bubble">
+                        {isUser ? (
+                          <div className="flex justify-end">
+                            <div className="max-w-[80%] rounded-3xl bg-[#282a2c] px-5 py-3 text-base leading-relaxed">
+                              {m.imageUrl && (
+                                <img
+                                  src={m.imageUrl}
+                                  alt="Uploaded question"
+                                  className="mb-2 max-h-64 w-auto max-w-full rounded-2xl object-contain"
+                                />
+                              )}
+                              <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-4">
+                            <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#4285f4] via-[#9b72cb] to-[#d96570]">
+                              <Sparkles className="h-4 w-4 text-white" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="prose-chat break-words text-base leading-relaxed text-[#e3e3e3]">
+                                <ReactMarkdown>{m.content}</ReactMarkdown>
+                              </div>
+
+                              {m.content && (
+                                <div className="mt-2 flex items-center gap-1">
+                                  <button
+                                    onClick={() => copyText(m.content, m.id)}
+                                    className={iconBtn}
+                                    title="Copy"
+                                    aria-label="Copy answer"
+                                  >
+                                    {copiedId === m.id ? (
+                                      <Check className="h-4 w-4 text-emerald-400" />
+                                    ) : (
+                                      <Copy className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => speakText(m.content)}
+                                    className={iconBtn}
+                                    title="Listen"
+                                    aria-label="Read answer aloud"
+                                  >
+                                    <Volume2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )}
+
+                              {m.suggestedFollowups && m.suggestedFollowups.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {m.suggestedFollowups.map((f) => (
+                                    <button
+                                      key={f}
+                                      onClick={() => handleSendMessage(f)}
+                                      className="rounded-full border border-white/10 px-3.5 py-1.5 text-sm text-[#c4c7c5] transition-colors hover:bg-white/5 hover:text-white"
+                                    >
+                                      {f}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {isGenerating && (
+                    <div className="flex items-center gap-4" role="status" aria-label="Aura is thinking">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#4285f4] via-[#9b72cb] to-[#d96570]">
+                        <Sparkles className="h-4 w-4 animate-pulse text-white" />
+                      </span>
+                      <span className="flex items-center gap-1 text-[#a8c7fa]">
+                        <span className="gemini-typing-dot" />
+                        <span className="gemini-typing-dot" />
+                        <span className="gemini-typing-dot" />
+                      </span>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+            <div className="shrink-0 px-6 pt-2 pb-6">
+              {composer}
+              <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-[#80868b]">
+                Aura can make mistakes. Check important answers against your textbook.
+              </p>
+            </div>
+          </>
+        )}
       </main>
 
-      {/* Camera Capture Modal */}
       <CameraCaptureModal
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onCapture={handleCapturePhoto}
       />
 
-      {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -721,3 +635,4 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     </div>
   );
 };
+
