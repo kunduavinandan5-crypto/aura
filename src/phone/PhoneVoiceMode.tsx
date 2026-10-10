@@ -34,12 +34,14 @@ export const PhoneVoiceMode: React.FC<PhoneVoiceModeProps> = ({
     return () => clearInterval(interval);
   }, [isPaused]);
 
-  // Real Web Speech Recognition
+  // Real Web Speech Recognition (Continuous)
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       setTranscribedText('Tap the microphone button to ask anything');
       return;
     }
+
+    let isComponentMounted = true;
 
     try {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -49,35 +51,50 @@ export const PhoneVoiceMode: React.FC<PhoneVoiceModeProps> = ({
       recognition.lang = 'en-US';
 
       recognition.onstart = () => {
-        setIsListening(true);
+        if (isComponentMounted) {
+          setIsListening(true);
+        }
       };
 
       recognition.onresult = (event: any) => {
-        const current = event.resultIndex;
-        const transcript = event.results[current][0].transcript;
-        setTranscribedText(transcript);
-
-        if (event.results[current].isFinal) {
-          setTimeout(() => {
-            onTranscriptionRef.current(transcript);
-            onCloseRef.current();
-          }, 800);
+        if (!isComponentMounted) return;
+        let finalStr = '';
+        let interimStr = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const res = event.results[i];
+          if (res.isFinal) {
+            finalStr += res[0].transcript + ' ';
+          } else {
+            interimStr += res[0].transcript;
+          }
+        }
+        const full = (finalStr + interimStr).trim();
+        if (full) {
+          setTranscribedText(full);
         }
       };
 
       recognition.onerror = (err: any) => {
-        console.warn('Speech error:', err);
-        setIsListening(false);
+        if (err.error !== 'no-speech') {
+          console.warn('Speech error:', err);
+        }
       };
 
       recognition.onend = () => {
-        setIsListening(false);
+        if (isComponentMounted && !isPaused) {
+          try {
+            recognition.start();
+          } catch (_) {}
+        } else {
+          setIsListening(false);
+        }
       };
 
       recognition.start();
       recognitionRef.current = recognition;
 
       return () => {
+        isComponentMounted = false;
         try {
           recognition.stop();
         } catch { }

@@ -77,11 +77,21 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const recognitionRef = useRef<any>(null);
+  const isVoiceActiveRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return () => {
+      isVoiceActiveRef.current = false;
+      try {
+        recognitionRef.current?.stop();
+      } catch (_) {}
+    };
+  }, []);
 
   // Auto-scroll inside the chat container only
   useEffect(() => {
@@ -110,38 +120,66 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
     { dependencies: [messages.length], scope: containerRef }
   );
 
-  /* ─── Start inline speech recognition ─── */
+  /* ─── Start inline speech recognition (Continuous recording until user stops) ─── */
   const startVoice = useCallback(() => {
     setIsVoiceActive(true);
+    isVoiceActiveRef.current = true;
     setVoiceTranscript('');
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       toast.error('Voice input is not supported in this browser. Please type your question.');
       setIsVoiceActive(false);
+      isVoiceActiveRef.current = false;
       return;
     }
 
     try {
       const recognition = new SR();
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
-      recognition.onstart = () => setIsListening(true);
+      recognition.onstart = () => {
+        if (isVoiceActiveRef.current) {
+          setIsListening(true);
+        }
+      };
 
       recognition.onresult = (e: any) => {
-        const transcript = Array.from(e.results as SpeechRecognitionResultList)
-          .map((r) => r[0].transcript)
-          .join('');
-        setVoiceTranscript(transcript);
-        if (e.results[e.results.length - 1].isFinal) {
+        if (!isVoiceActiveRef.current) return;
+        let finalStr = '';
+        let interimStr = '';
+        for (let i = 0; i < e.results.length; i++) {
+          const res = e.results[i];
+          if (res.isFinal) {
+            finalStr += res[0].transcript + ' ';
+          } else {
+            interimStr += res[0].transcript;
+          }
+        }
+        const full = (finalStr + interimStr).trim();
+        if (full) {
+          setVoiceTranscript(full);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'no-speech') {
+          console.warn('Speech recognition notice:', event.error);
+        }
+      };
+
+      recognition.onend = () => {
+        if (isVoiceActiveRef.current) {
+          try {
+            recognition.start();
+          } catch (_) {}
+        } else {
           setIsListening(false);
         }
       };
 
-      recognition.onerror = () => setIsListening(false);
-      recognition.onend = () => setIsListening(false);
       recognition.start();
       recognitionRef.current = recognition;
     } catch {
@@ -150,6 +188,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   }, []);
 
   const stopVoice = useCallback(() => {
+    isVoiceActiveRef.current = false;
     try {
       recognitionRef.current?.stop();
     } catch { }
@@ -159,10 +198,17 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   }, []);
 
   const sendVoice = useCallback(() => {
-    if (!voiceTranscript.trim()) return;
-    onSendMessage(voiceTranscript.trim());
-    stopVoice();
-  }, [voiceTranscript, onSendMessage, stopVoice]);
+    isVoiceActiveRef.current = false;
+    try {
+      recognitionRef.current?.stop();
+    } catch { }
+    setIsListening(false);
+    setIsVoiceActive(false);
+    if (voiceTranscript.trim()) {
+      onSendMessage(voiceTranscript.trim());
+    }
+    setVoiceTranscript('');
+  }, [voiceTranscript, onSendMessage]);
 
   const handleSend = () => {
     if ((!input.trim() && !attachedImage) || isGenerating) return;
@@ -255,7 +301,6 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         {/* VOICE ACTIVE STATE: inline Gemini listening view */}
         {isVoiceActive ? (
           <div className="flex h-full flex-col items-center justify-center text-center py-6 anim-fade-in">
-            <div className="absolute inset-0 bg-gradient-to-t from-blue-900/20 via-transparent to-transparent pointer-events-none" />
 
             {/* Gemini fluid orb */}
             <div
@@ -421,35 +466,35 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
 
         {isVoiceActive ? (
           /* ═══ GEMINI-STYLE INLINE VOICE BAR ═══ */
-          <div className="relative flex items-center gap-3 rounded-full border border-white/20 bg-white/[0.04] px-4 py-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_16px_rgba(0,0,0,0.3)] backdrop-blur-2xl anim-fade-up">
+          <div className="relative flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.04] p-1.5 pl-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-2xl transition-all">
             <button
               onClick={stopVoice}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-white transition-colors"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
               title="Cancel"
             >
-              <Plus className="h-4 w-4 rotate-45" />
+              <X className="h-4 w-4" />
             </button>
 
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center px-2">
               <VoiceWaveform isActive={isListening} />
             </div>
 
             <button
-              onClick={voiceTranscript ? sendVoice : stopVoice}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/15"
-              title={voiceTranscript ? 'Stop' : 'Cancel'}
+              onClick={stopVoice}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/15"
+              title="Stop recording"
             >
-              <Square className="h-4 w-4 fill-current" />
+              <Square className="h-3.5 w-3.5 fill-current" />
             </button>
 
             <button
               type="button"
               onClick={voiceTranscript ? sendVoice : startVoice}
               disabled={!voiceTranscript && isListening}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
                 voiceTranscript
-                  ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110'
-                  : 'bg-blue-600/50 shadow-blue-600/20 cursor-default'
+                  ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110 cursor-pointer'
+                  : 'bg-blue-600/50 shadow-blue-600/20 cursor-default opacity-50'
               }`}
               title="Send"
             >
