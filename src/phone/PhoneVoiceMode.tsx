@@ -18,6 +18,8 @@ export const PhoneVoiceMode: React.FC<PhoneVoiceModeProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [transcribedText, setTranscribedText] = useState('Listening... Speak to Aura');
   const recognitionRef = useRef<any>(null);
+  const accumulatedTranscriptRef = useRef('');
+  const restartTimeoutRef = useRef<any>(null);
 
   // Keep latest callbacks in refs so the recognizer is created once per mount, not on every parent render.
   const onTranscriptionRef = useRef(onVoiceTranscription);
@@ -34,75 +36,120 @@ export const PhoneVoiceMode: React.FC<PhoneVoiceModeProps> = ({
     return () => clearInterval(interval);
   }, [isPaused]);
 
-  // Real Web Speech Recognition (Continuous)
+  // Real Web Speech Recognition (Continuous with safe auto-reconnect)
   useEffect(() => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
       setTranscribedText('Tap the microphone button to ask anything');
       return;
     }
 
     let isComponentMounted = true;
 
-    try {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+    const initSession = () => {
+      if (!isComponentMounted || isPaused) return;
 
-      recognition.onstart = () => {
-        if (isComponentMounted) {
-          setIsListening(true);
-        }
-      };
-
-      recognition.onresult = (event: any) => {
-        if (!isComponentMounted) return;
-        let finalStr = '';
-        let interimStr = '';
-        for (let i = 0; i < event.results.length; i++) {
-          const res = event.results[i];
-          if (res.isFinal) {
-            finalStr += res[0].transcript + ' ';
-          } else {
-            interimStr += res[0].transcript;
-          }
-        }
-        const full = (finalStr + interimStr).trim();
-        if (full) {
-          setTranscribedText(full);
-        }
-      };
-
-      recognition.onerror = (err: any) => {
-        if (err.error !== 'no-speech') {
-          console.warn('Speech error:', err);
-        }
-      };
-
-      recognition.onend = () => {
-        if (isComponentMounted && !isPaused) {
+      try {
+        if (recognitionRef.current) {
           try {
-            recognition.start();
-          } catch (_) {}
+            recognitionRef.current.abort();
+          } catch (_) { }
+          recognitionRef.current = null;
+        }
+
+        const recognition = new SR();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        recognition.maxAlternatives = 1;
+
+        let sessionFinalChunk = '';
+
+        recognition.onstart = () => {
+          if (isComponentMounted) {
+            setIsListening(true);
+          }
+        };
+
+        recognition.onresult = (event: any) => {
+          if (!isComponentMounted) return;
+          let currentFinal = '';
+          let currentInterim = '';
+
+          for (let i = 0; i < event.results.length; i++) {
+            const res = event.results[i];
+            if (res.isFinal) {
+              currentFinal += res[0].transcript + ' ';
+            } else {
+              currentInterim += res[0].transcript;
+            }
+          }
+
+          sessionFinalChunk = currentFinal;
+          const combined = `${accumulatedTranscriptRef.current} ${currentFinal} ${currentInterim}`
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          if (combined) {
+            setTranscribedText(combined);
+          }
+        };
+
+        recognition.onerror = (err: any) => {
+          if (err.error !== 'no-speech' && err.error !== 'aborted') {
+            console.warn('Speech error:', err);
+          }
+        };
+
+        recognition.onend = () => {
+          if (sessionFinalChunk) {
+            accumulatedTranscriptRef.current = `${accumulatedTranscriptRef.current} ${sessionFinalChunk}`
+              .replace(/\s+/g, ' ')
+              .trim();
+            sessionFinalChunk = '';
+          }
+
+          if (isComponentMounted && !isPaused) {
+            if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+            restartTimeoutRef.current = setTimeout(() => {
+              if (isComponentMounted && !isPaused) {
+                initSession();
+              }
+            }, 120);
+          } else {
+            setIsListening(false);
+          }
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+      } catch (e) {
+        console.warn('Voice session start error:', e);
+        if (isComponentMounted && !isPaused) {
+          if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+          restartTimeoutRef.current = setTimeout(() => {
+            if (isComponentMounted && !isPaused) initSession();
+          }, 250);
         } else {
           setIsListening(false);
         }
-      };
+      }
+    };
 
-      recognition.start();
-      recognitionRef.current = recognition;
+    initSession();
 
-      return () => {
-        isComponentMounted = false;
-        try {
-          recognition.stop();
-        } catch { }
-      };
-    } catch {
-      setIsListening(false);
-    }
-  }, []);
+    return () => {
+      isComponentMounted = false;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+        restartTimeoutRef.current = null;
+      }
+      try {
+        recognitionRef.current?.abort();
+      } catch { }
+      recognitionRef.current = null;
+    };
+  }, [isPaused]);
 
   const formatTimer = (s: number) => {
     const mins = Math.floor(s / 60).toString().padStart(2, '0');

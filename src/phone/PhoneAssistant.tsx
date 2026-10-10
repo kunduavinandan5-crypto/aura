@@ -82,6 +82,8 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const recognitionRef = useRef<any>(null);
   const isVoiceActiveRef = useRef(false);
+  const accumulatedTranscriptRef = useRef('');
+  const restartTimeoutRef = useRef<any>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,8 +93,12 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   useEffect(() => {
     return () => {
       isVoiceActiveRef.current = false;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+        restartTimeoutRef.current = null;
+      }
       try {
-        recognitionRef.current?.stop();
+        recognitionRef.current?.abort();
       } catch (_) { }
     };
   }, []);
@@ -129,6 +135,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
     setIsVoiceActive(true);
     isVoiceActiveRef.current = true;
     setVoiceTranscript('');
+    accumulatedTranscriptRef.current = '';
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
@@ -138,80 +145,135 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       return;
     }
 
-    try {
-      const recognition = new SR();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+    const initRecognitionSession = () => {
+      if (!isVoiceActiveRef.current) return;
 
-      recognition.onstart = () => {
-        if (isVoiceActiveRef.current) {
-          setIsListening(true);
-        }
-      };
-
-      recognition.onresult = (e: any) => {
-        if (!isVoiceActiveRef.current) return;
-        let finalStr = '';
-        let interimStr = '';
-        for (let i = 0; i < e.results.length; i++) {
-          const res = e.results[i];
-          if (res.isFinal) {
-            finalStr += res[0].transcript + ' ';
-          } else {
-            interimStr += res[0].transcript;
-          }
-        }
-        const full = (finalStr + interimStr).trim();
-        if (full) {
-          setVoiceTranscript(full);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error !== 'no-speech') {
-          console.warn('Speech recognition notice:', event.error);
-        }
-      };
-
-      recognition.onend = () => {
-        if (isVoiceActiveRef.current) {
+      try {
+        if (recognitionRef.current) {
           try {
-            recognition.start();
+            recognitionRef.current.abort();
           } catch (_) { }
+          recognitionRef.current = null;
+        }
+
+        const recognition = new SR();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        recognition.maxAlternatives = 1;
+
+        let sessionFinalChunk = '';
+
+        recognition.onstart = () => {
+          if (isVoiceActiveRef.current) {
+            setIsListening(true);
+          }
+        };
+
+        recognition.onresult = (e: any) => {
+          if (!isVoiceActiveRef.current) return;
+          let currentFinal = '';
+          let currentInterim = '';
+
+          for (let i = 0; i < e.results.length; i++) {
+            const res = e.results[i];
+            if (res.isFinal) {
+              currentFinal += res[0].transcript + ' ';
+            } else {
+              currentInterim += res[0].transcript;
+            }
+          }
+
+          sessionFinalChunk = currentFinal;
+          const combined = `${accumulatedTranscriptRef.current} ${currentFinal} ${currentInterim}`
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          if (combined) {
+            setVoiceTranscript(combined);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          // 'no-speech' or 'aborted' are standard non-fatal events during pauses on mobile
+          if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            console.warn('Speech recognition notice:', event.error);
+          }
+        };
+
+        recognition.onend = () => {
+          if (sessionFinalChunk) {
+            accumulatedTranscriptRef.current = `${accumulatedTranscriptRef.current} ${sessionFinalChunk}`
+              .replace(/\s+/g, ' ')
+              .trim();
+            sessionFinalChunk = '';
+          }
+
+          if (isVoiceActiveRef.current) {
+            if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+            restartTimeoutRef.current = setTimeout(() => {
+              if (isVoiceActiveRef.current) {
+                initRecognitionSession();
+              }
+            }, 120);
+          } else {
+            setIsListening(false);
+          }
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+      } catch (err) {
+        console.warn('Speech recognition start notice:', err);
+        if (isVoiceActiveRef.current) {
+          if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+          restartTimeoutRef.current = setTimeout(() => {
+            if (isVoiceActiveRef.current) initRecognitionSession();
+          }, 250);
         } else {
           setIsListening(false);
         }
-      };
+      }
+    };
 
-      recognition.start();
-      recognitionRef.current = recognition;
-    } catch {
-      setIsListening(false);
-    }
+    initRecognitionSession();
   }, []);
 
   const stopVoice = useCallback(() => {
     isVoiceActiveRef.current = false;
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
     try {
-      recognitionRef.current?.stop();
+      recognitionRef.current?.abort();
     } catch { }
+    recognitionRef.current = null;
     setIsListening(false);
     setIsVoiceActive(false);
     setVoiceTranscript('');
+    accumulatedTranscriptRef.current = '';
   }, []);
 
   const sendVoice = useCallback(() => {
     isVoiceActiveRef.current = false;
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
     try {
-      recognitionRef.current?.stop();
+      recognitionRef.current?.abort();
     } catch { }
+    recognitionRef.current = null;
     setIsListening(false);
     setIsVoiceActive(false);
-    if (voiceTranscript.trim()) {
-      onSendMessage(voiceTranscript.trim());
+
+    const textToSend = voiceTranscript.trim() || accumulatedTranscriptRef.current.trim();
+    if (textToSend) {
+      onSendMessage(textToSend);
     }
     setVoiceTranscript('');
+    accumulatedTranscriptRef.current = '';
   }, [voiceTranscript, onSendMessage]);
 
   const handleSend = () => {
