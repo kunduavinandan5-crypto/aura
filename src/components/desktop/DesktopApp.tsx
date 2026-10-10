@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Camera,
   Check,
@@ -20,6 +20,8 @@ import {
 import { PhoneOrb } from '@/phone/PhoneOrb';
 import { SettingsModal } from '../settings/SettingsModal';
 import { CameraCaptureModal } from '../camera/CameraCaptureModal';
+import { Velaris } from '@/components/ui/velaris';
+import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { UserProfile } from '@/types';
 import { useChat } from '@/hooks/useChat';
 import { SubjectSelect } from '../SubjectSelect';
@@ -183,7 +185,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   const stopVoice = useCallback(() => {
     try {
       recognitionRef.current?.stop();
-    } catch {}
+    } catch { }
     setIsListening(false);
     setIsVoiceActive(false);
     setVoiceTranscript('');
@@ -264,115 +266,118 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   const isCenteredStart = messages.length === 0 && !isVoiceActive;
 
   const composer = (
-          <div className="mx-auto max-w-3xl space-y-2">
-            {/* Image Preview Chip if attached */}
-            {attachedImage && !isVoiceActive && (
-              <div className="flex items-center gap-3 rounded-2xl border border-blue-500/30 bg-blue-950/25 p-2 px-3 w-fit anim-fade-up">
-                <img
-                  src={attachedImage}
-                  alt="Attached preview"
-                  className="h-12 w-12 rounded-lg object-cover border border-white/20 shadow-md"
-                />
-                <div className="text-xs">
-                  <p className="font-semibold text-white">Photo Attached</p>
-                  <p className="text-[10px] text-blue-300">Ready to analyze</p>
-                </div>
-                <button
-                  onClick={() => setAttachedImage(null)}
-                  className="rounded-full p-1 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors ml-2"
-                  title="Remove image"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
-            {isVoiceActive ? (
-              /* Gemini-style inline voice bar */
-              <div className="flex items-center gap-3 rounded-full border border-white/12 bg-[#1a1c28]/95 px-4 py-3 shadow-2xl backdrop-blur-xl anim-fade-up">
-                <button
-                  onClick={stopVoice}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:text-white transition-colors"
-                  title="Cancel"
-                >
-                  <Plus className="h-4 w-4 rotate-45" />
-                </button>
-                <div className="flex-1 flex items-center justify-center">
-                  <VoiceWaveform isActive={isListening} />
-                </div>
-                <button
-                  onClick={voiceTranscript ? sendVoice : stopVoice}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/15"
-                  title="Stop"
-                >
-                  <Square className="h-4 w-4 fill-current" />
-                </button>
-                <button
-                  onClick={voiceTranscript ? sendVoice : startVoice}
-                  disabled={!voiceTranscript && isListening}
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
-                    voiceTranscript
-                      ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110'
-                      : 'bg-blue-600/50 shadow-blue-600/20 cursor-default'
-                  }`}
-                >
-                  <Send className="h-4 w-4 fill-current ml-0.5" />
-                </button>
-              </div>
-            ) : (
-              /* Normal input with Upload Photo + Capture Photo */
-              <div className="flex items-center gap-2 rounded-full border border-white/12 bg-[#1a1c28]/95 p-2 pl-3 shadow-2xl focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/15 transition-all">
-                {/* Capture Photo from Camera */}
-                <button
-                  type="button"
-                  onClick={() => setIsCameraOpen(true)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-cyan-400 transition-colors"
-                  title="Capture Photo with Camera"
-                  aria-label="Capture photo with camera"
-                >
-                  <Camera className="h-4 w-4" />
-                </button>
-
-                {/* Upload Photo from file */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-blue-400 transition-colors"
-                  title="Upload Photo / Image"
-                  aria-label="Upload photo"
-                >
-                  <ImageIcon className="h-4 w-4" />
-                </button>
-
-                <SubjectSelect value={subjectId} onChange={setSubjectId} disabled={isGenerating} />
-
-                <input
-                  ref={textareaRef}
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  aria-label="Ask Aura a question"
-                  onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSendMessage(input)}
-                  placeholder="Ask a question, upload/capture a photo, or use voice..."
-                  className="w-full bg-transparent text-sm text-white placeholder-[#5a6275] focus:outline-none"
-                />
-
-                <button
-                  onClick={
-                    input.trim() || attachedImage ? () => handleSendMessage(input) : startVoice
-                  }
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-indigo-600 to-violet-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-105"
-                  title={input.trim() || attachedImage ? 'Send' : 'Voice mode'}
-                >
-                  {input.trim() || attachedImage ? (
-                    <Send className="h-4 w-4 fill-current ml-0.5" />
-                  ) : (
-                    <Mic className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            )}
+    <div className="mx-auto max-w-3xl space-y-2">
+      {/* Image Preview Chip if attached */}
+      {attachedImage && !isVoiceActive && (
+        <div className="flex items-center gap-3 rounded-2xl border border-blue-500/30 bg-blue-950/25 p-2 px-3 w-fit anim-fade-up">
+          <img
+            src={attachedImage}
+            alt="Attached preview"
+            className="h-12 w-12 rounded-lg object-cover border border-white/20 shadow-md"
+          />
+          <div className="text-xs">
+            <p className="font-semibold text-white">Photo Attached</p>
+            <p className="text-[10px] text-blue-300">Ready to analyze</p>
           </div>
+          <button
+            onClick={() => setAttachedImage(null)}
+            className="rounded-full p-1 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors ml-2"
+            title="Remove image"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {isVoiceActive ? (
+        /* Gemini-style inline voice bar with white liquid-glass aesthetic */
+        <div className="relative flex items-center gap-3 rounded-full border border-white/20 bg-white/[0.04] px-4 py-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_16px_rgba(0,0,0,0.3)] backdrop-blur-2xl anim-fade-up">
+          <button
+            onClick={stopVoice}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-white transition-colors"
+            title="Cancel"
+          >
+            <Plus className="h-4 w-4 rotate-45" />
+          </button>
+          <div className="flex-1 flex items-center justify-center">
+            <VoiceWaveform isActive={isListening} />
+          </div>
+          <button
+            onClick={voiceTranscript ? sendVoice : stopVoice}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/15"
+            title="Stop"
+          >
+            <Square className="h-4 w-4 fill-current" />
+          </button>
+          <button
+            type="button"
+            onClick={voiceTranscript ? sendVoice : startVoice}
+            disabled={!voiceTranscript && isListening}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
+              voiceTranscript
+                ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110'
+                : 'bg-blue-600/50 shadow-blue-600/20 cursor-default'
+            }`}
+            title="Send"
+          >
+            <Send className="h-4 w-4 fill-current ml-0.5" />
+          </button>
+        </div>
+      ) : (
+        /* White Liquid Glass Search / Question Box */
+        <div className="relative flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.04] p-2 pl-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-2xl focus-within:border-white/40 focus-within:ring-2 focus-within:ring-white/10 transition-all">
+          {/* Capture Photo from Camera */}
+          <button
+            type="button"
+            onClick={() => setIsCameraOpen(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-cyan-400 transition-colors"
+            title="Capture Photo with Camera"
+            aria-label="Capture photo with camera"
+          >
+            <Camera className="h-4 w-4" />
+          </button>
+
+          {/* Upload Photo from file */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-blue-400 transition-colors"
+            title="Upload Photo / Image"
+            aria-label="Upload photo"
+          >
+            <ImageIcon className="h-4 w-4" />
+          </button>
+
+          <SubjectSelect value={subjectId} onChange={setSubjectId} disabled={isGenerating} />
+
+          <input
+            ref={textareaRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            aria-label="ask your question"
+            onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSendMessage(input)}
+            placeholder="ask your question"
+            className="w-full bg-transparent text-sm text-white placeholder-zinc-400 focus:outline-none"
+          />
+
+          <button
+            type="button"
+            onClick={
+              input.trim() || attachedImage ? () => handleSendMessage(input) : startVoice
+            }
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-indigo-600 to-violet-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
+            title={input.trim() || attachedImage ? 'Send' : 'Voice mode'}
+          >
+            {input.trim() || attachedImage ? (
+              <Send className="h-4 w-4 fill-current ml-0.5" />
+            ) : (
+              <Mic className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -392,9 +397,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
       {/* ── Sidebar ── */}
       <aside
-        className={`flex h-full flex-col justify-between border-r border-white/[0.06] bg-[#0b0d16]/95 backdrop-blur-2xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-20 ${
-          isSidebarOpen ? 'w-64 p-4' : 'w-0 overflow-hidden border-none p-0'
-        }`}
+        className={`flex h-full flex-col justify-between border-r border-white/[0.06] bg-[#0b0d16]/95 backdrop-blur-2xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-20 ${isSidebarOpen ? 'w-64 p-4' : 'w-0 overflow-hidden border-none p-0'
+          }`}
       >
         <div className="flex flex-col flex-1 min-h-0 space-y-4 overflow-y-auto">
           <div className="flex items-center justify-between px-1">
@@ -438,11 +442,10 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                   <div key={t.id} className="group relative">
                     <button
                       onClick={() => setActiveThreadId(t.id)}
-                      className={`flex w-full items-center gap-2.5 rounded-xl py-2 pl-3 pr-9 text-left text-xs transition-all ${
-                        activeThreadId === t.id
-                          ? 'bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30'
-                          : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                      }`}
+                      className={`flex w-full items-center gap-2.5 rounded-xl py-2 pl-3 pr-9 text-left text-xs transition-all ${activeThreadId === t.id
+                        ? 'bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30'
+                        : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                        }`}
                     >
                       <MessageSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
                       <span className="truncate">{t.title}</span>
@@ -484,8 +487,22 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
       {/* ── Main Canvas ── */}
       <main className="flex flex-1 min-h-0 flex-col overflow-hidden bg-[#07080e] relative z-10">
+        {/* Animated WebGL Simplex-Noise gradient background during active chat conversation */}
+        {messages.length > 0 && !isVoiceActive && (
+          <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-50 transition-opacity duration-700">
+            <Velaris
+              height="100%"
+              bg="#07080e"
+              colors={['#1d4ed8', '#4338ca', '#6d28d9', '#07080e']}
+              speed={1.2}
+              grain={0.2}
+              className="h-full w-full"
+            />
+          </div>
+        )}
+
         {/* Top Header */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-6">
+        <header className="flex h-14 shrink-0 items-center justify-between px-6 relative z-10">
           <div className="flex items-center gap-3">
             {!isSidebarOpen && (
               <button
@@ -524,7 +541,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
         </header>
 
         {/* ── Chat Messages or Voice View ── */}
-        <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-6">
+        <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-6 relative z-10">
           {isVoiceActive ? (
             /* Gemini-style inline listening state on Desktop */
             <div className="flex h-full flex-col items-center justify-center text-center anim-fade-in">
@@ -624,16 +641,14 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                 return (
                   <div
                     key={m.id}
-                    className={`desktop-chat-bubble flex gap-3.5 ${
-                      isUser ? 'justify-end' : 'justify-start'
-                    }`}
+                    className={`desktop-chat-bubble flex gap-3.5 ${isUser ? 'justify-end' : 'justify-start'
+                      }`}
                   >
                     <div
-                      className={`rounded-2xl px-5 py-4 text-sm leading-relaxed max-w-[85%] ${
-                        isUser
-                          ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 text-white shadow-lg shadow-blue-600/20'
-                          : 'border border-white/10 bg-[#121420]/95 text-zinc-200 shadow-xl backdrop-blur-md'
-                      }`}
+                      className={`rounded-2xl px-5 py-4 text-sm leading-relaxed max-w-[85%] ${isUser
+                        ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 text-white shadow-lg shadow-blue-600/20'
+                        : 'border border-white/10 bg-[#121420]/95 text-zinc-200 shadow-xl backdrop-blur-md'
+                        }`}
                     >
                       {/* Uploaded / Captured Image in User Message */}
                       {m.imageUrl && (
@@ -717,9 +732,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
           )}
         </div>
 
-        {/* ── Bottom Input / Voice Bar (hidden on the empty start screen, where the bar is centered) ── */}
+        {/* ── Bottom Input / Voice Bar (seamlessly floating over unified background) ── */}
         {!isCenteredStart && (
-          <div className="border-t border-white/[0.06] bg-[#07080e]/90 p-4 sm:px-12 backdrop-blur-2xl shrink-0">
+          <div className="p-4 sm:px-12 pb-6 shrink-0 relative z-10 bg-transparent">
             {composer}
           </div>
         )}

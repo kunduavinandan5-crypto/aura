@@ -14,6 +14,8 @@ import {
 import { PhoneOrb } from './PhoneOrb';
 import { SubjectSelect } from '../components/SubjectSelect';
 import { CameraCaptureModal } from '../components/camera/CameraCaptureModal';
+import { Velaris } from '@/components/ui/velaris';
+import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { Message, UserProfile } from '@/types';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
@@ -150,7 +152,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const stopVoice = useCallback(() => {
     try {
       recognitionRef.current?.stop();
-    } catch {}
+    } catch { }
     setIsListening(false);
     setIsVoiceActive(false);
     setVoiceTranscript('');
@@ -234,8 +236,22 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         </button>
       </header>
 
+      {/* Animated WebGL Simplex-Noise gradient background during active chat conversation */}
+      {messages.length > 0 && !isVoiceActive && (
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-50 transition-opacity duration-700">
+          <Velaris
+            height="100%"
+            bg="#07080e"
+            colors={['#1d4ed8', '#4338ca', '#6d28d9', '#07080e']}
+            speed={1.2}
+            grain={0.2}
+            className="h-full w-full"
+          />
+        </div>
+      )}
+
       {/* ── Center Content ── */}
-      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-2 z-10">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-2 z-10 relative">
         {/* VOICE ACTIVE STATE: inline Gemini listening view */}
         {isVoiceActive ? (
           <div className="flex h-full flex-col items-center justify-center text-center py-6 anim-fade-in">
@@ -324,16 +340,14 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
               return (
                 <div
                   key={m.id}
-                  className={`phone-chat-bubble flex gap-2.5 ${
-                    isUser ? 'justify-end' : 'justify-start'
-                  }`}
+                  className={`phone-chat-bubble flex gap-2.5 ${isUser ? 'justify-end' : 'justify-start'
+                    }`}
                 >
                   <div
-                    className={`rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed max-w-[85%] ${
-                      isUser
-                        ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 text-white shadow-md shadow-blue-600/20'
-                        : 'border border-white/10 bg-[#141622]/95 text-zinc-200 shadow-lg'
-                    }`}
+                    className={`rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed max-w-[85%] ${isUser
+                      ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 text-white shadow-md shadow-blue-600/20'
+                      : 'border border-white/10 bg-[#141622]/95 text-zinc-200 shadow-lg'
+                      }`}
                   >
                     {/* Uploaded / Captured Image thumbnail */}
                     {m.imageUrl && (
@@ -407,10 +421,10 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
 
         {isVoiceActive ? (
           /* ═══ GEMINI-STYLE INLINE VOICE BAR ═══ */
-          <div className="flex items-center gap-3 rounded-full border border-white/12 bg-[#1a1c28]/95 px-4 py-3 shadow-2xl backdrop-blur-xl anim-fade-up">
+          <div className="relative flex items-center gap-3 rounded-full border border-white/20 bg-white/[0.04] px-4 py-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_16px_rgba(0,0,0,0.3)] backdrop-blur-2xl anim-fade-up">
             <button
               onClick={stopVoice}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:text-white transition-colors"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-white transition-colors"
               title="Cancel"
             >
               <Plus className="h-4 w-4 rotate-45" />
@@ -429,6 +443,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={voiceTranscript ? sendVoice : startVoice}
               disabled={!voiceTranscript && isListening}
               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
@@ -442,8 +457,8 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
             </button>
           </div>
         ) : (
-          /* ═══ NORMAL TEXT INPUT BAR WITH PHOTO UPLOAD & CAPTURE ═══ */
-          <div className="flex items-center gap-2 rounded-full border border-white/12 bg-[#1a1c28]/95 p-1.5 pl-3 shadow-2xl backdrop-blur-xl focus-within:border-blue-500/40 transition-all">
+          /* ═══ LIQUID GLASS SEARCH / QUESTION BAR ═══ */
+          <div className="relative flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.04] p-1.5 pl-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-2xl focus-within:border-white/40 transition-all">
             {/* Capture Photo Button */}
             <button
               type="button"
@@ -471,12 +486,13 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Ask a question or snap a photo..."
-              className="w-full bg-transparent text-xs text-white placeholder-[#5a6275] focus:outline-none"
+              placeholder="ask your question"
+              className="w-full bg-transparent text-xs text-white placeholder-zinc-400 focus:outline-none"
             />
 
-            {/* Mic / Send toggle */}
+            {/* Mic / Send button */}
             <button
+              type="button"
               onClick={input.trim() || attachedImage ? handleSend : startVoice}
               className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-violet-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
               title={input.trim() || attachedImage ? 'Send' : 'Voice input'}
@@ -489,6 +505,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
             </button>
           </div>
         )}
+        <GlassFilter />
       </div>
 
       {/* Camera Capture Modal */}
