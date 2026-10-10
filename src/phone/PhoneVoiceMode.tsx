@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Mic, MoreVertical, Pause, Play, Volume2, X } from 'lucide-react';
 import { PhoneOrb } from './PhoneOrb';
 import { toast } from 'sonner';
+import { mergeTranscripts, cleanDuplicatePhrases } from '@/lib/utils';
 
 interface PhoneVoiceModeProps {
   onClose: () => void;
@@ -86,12 +87,11 @@ export const PhoneVoiceMode: React.FC<PhoneVoiceModeProps> = ({
           }
 
           sessionFinalChunk = currentFinal;
-          const combined = `${accumulatedTranscriptRef.current} ${currentFinal} ${currentInterim}`
-            .replace(/\s+/g, ' ')
-            .trim();
+          const sessionText = `${currentFinal} ${currentInterim}`.trim();
+          const merged = mergeTranscripts(accumulatedTranscriptRef.current, sessionText);
 
-          if (combined) {
-            setTranscribedText(combined);
+          if (merged) {
+            setTranscribedText(merged);
           }
         };
 
@@ -103,9 +103,10 @@ export const PhoneVoiceMode: React.FC<PhoneVoiceModeProps> = ({
 
         recognition.onend = () => {
           if (sessionFinalChunk) {
-            accumulatedTranscriptRef.current = `${accumulatedTranscriptRef.current} ${sessionFinalChunk}`
-              .replace(/\s+/g, ' ')
-              .trim();
+            accumulatedTranscriptRef.current = mergeTranscripts(
+              accumulatedTranscriptRef.current,
+              sessionFinalChunk
+            );
             sessionFinalChunk = '';
           }
 

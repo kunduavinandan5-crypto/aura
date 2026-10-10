@@ -19,6 +19,7 @@ import { CameraCaptureModal } from '../components/camera/CameraCaptureModal';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { Message, UserProfile } from '@/types';
+import { mergeTranscripts, cleanDuplicatePhrases } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 import { useGSAP } from '@gsap/react';
@@ -185,12 +186,11 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           }
 
           sessionFinalChunk = currentFinal;
-          const combined = `${accumulatedTranscriptRef.current} ${currentFinal} ${currentInterim}`
-            .replace(/\s+/g, ' ')
-            .trim();
+          const sessionText = `${currentFinal} ${currentInterim}`.trim();
+          const merged = mergeTranscripts(accumulatedTranscriptRef.current, sessionText);
 
-          if (combined) {
-            setVoiceTranscript(combined);
+          if (merged) {
+            setVoiceTranscript(merged);
           }
         };
 
@@ -203,9 +203,10 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
 
         recognition.onend = () => {
           if (sessionFinalChunk) {
-            accumulatedTranscriptRef.current = `${accumulatedTranscriptRef.current} ${sessionFinalChunk}`
-              .replace(/\s+/g, ' ')
-              .trim();
+            accumulatedTranscriptRef.current = mergeTranscripts(
+              accumulatedTranscriptRef.current,
+              sessionFinalChunk
+            );
             sessionFinalChunk = '';
           }
 
@@ -268,7 +269,9 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
     setIsListening(false);
     setIsVoiceActive(false);
 
-    const textToSend = voiceTranscript.trim() || accumulatedTranscriptRef.current.trim();
+    const textToSend = cleanDuplicatePhrases(
+      voiceTranscript.trim() || accumulatedTranscriptRef.current.trim()
+    );
     if (textToSend) {
       onSendMessage(textToSend);
     }
@@ -372,10 +375,121 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
 
 
 
+  const isCenteredStart = messages.length === 0 && !isVoiceActive;
+
+  const phoneComposer = (
+    <div className="w-full">
+      {/* Attached Photo Preview */}
+      {attachedImage && !isVoiceActive && (
+        <div className="mb-2 flex items-center gap-2.5 rounded-2xl border border-blue-500/30 bg-blue-950/40 p-1.5 px-3 w-fit anim-fade-up">
+          <img
+            src={attachedImage}
+            alt="Preview"
+            className="h-9 w-9 rounded-lg object-cover border border-white/20"
+          />
+          <span className="text-[11px] font-medium text-blue-200">Photo Attached</span>
+          <button
+            onClick={() => setAttachedImage(null)}
+            className="rounded-full p-1 text-zinc-400 hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {isVoiceActive ? (
+        /* ═══ GEMINI-STYLE INLINE VOICE BAR ═══ */
+        <div className="relative flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.04] p-1.5 pl-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-2xl transition-all">
+          <button
+            onClick={stopVoice}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
+            title="Cancel"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <div className="flex-1 flex items-center justify-center px-2">
+            <VoiceWaveform isActive={isListening} />
+          </div>
+
+          <button
+            onClick={stopVoice}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/15"
+            title="Stop recording"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+          </button>
+
+          <button
+            type="button"
+            onClick={voiceTranscript ? sendVoice : startVoice}
+            disabled={!voiceTranscript && isListening}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
+              voiceTranscript
+                ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110 cursor-pointer'
+                : 'bg-blue-600/50 shadow-blue-600/20 cursor-default opacity-50'
+            }`}
+            title="Send"
+          >
+            <Send className="h-4 w-4 fill-current ml-0.5" />
+          </button>
+        </div>
+      ) : (
+        /* ═══ LIQUID GLASS SEARCH / QUESTION BAR ═══ */
+        <div className="relative flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.04] p-1.5 pl-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-2xl focus-within:border-white/40 transition-all">
+          {/* Capture Photo Button */}
+          <button
+            type="button"
+            onClick={() => setIsCameraOpen(true)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-cyan-400 transition-colors"
+            title="Capture photo"
+            aria-label="Capture photo with camera"
+          >
+            <Camera className="h-4 w-4" />
+          </button>
+
+          {/* Upload Photo Button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-blue-400 transition-colors"
+            title="Upload photo"
+            aria-label="Upload photo"
+          >
+            <ImageIcon className="h-4 w-4" />
+          </button>
+
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="ask your question"
+            className="w-full bg-transparent text-xs text-white placeholder-zinc-400 focus:outline-none"
+          />
+
+          {/* Mic / Send button */}
+          <button
+            type="button"
+            onClick={input.trim() || attachedImage ? handleSend : startVoice}
+            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-violet-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
+            title={input.trim() || attachedImage ? 'Send' : 'Voice input'}
+          >
+            {input.trim() || attachedImage ? (
+              <Send className="h-4 w-4 fill-current ml-0.5" />
+            ) : (
+              <Mic className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full w-full flex-col overflow-hidden bg-[#07080e] text-white select-none"
+      className="relative flex h-full w-full flex-col overflow-hidden bg-gradient-to-b from-[#1d1344] via-[#080d1a] to-[#05261f] text-white select-none"
     >
       {/* Hidden File Input */}
       <input
@@ -385,6 +499,20 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         onChange={handleFileChange}
         className="hidden"
       />
+
+      {/* Atmospheric gradient overlay with Velaris WebGL simplex noise */}
+      {!isVoiceActive && (
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-75 transition-opacity duration-700">
+          <Velaris
+            height="100%"
+            bg="#070a14"
+            colors={['#24154e', '#131b3e', '#073228', '#070a14']}
+            speed={0.8}
+            grain={0.15}
+            className="h-full w-full"
+          />
+        </div>
+      )}
 
       {/* ── Top Header ── */}
       <header className="relative flex h-16 w-full shrink-0 items-center justify-between px-5 pt-2 z-30">
@@ -406,25 +534,11 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         </button>
       </header>
 
-      {/* Animated WebGL Simplex-Noise gradient background during active chat conversation */}
-      {messages.length > 0 && !isVoiceActive && (
-        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-50 transition-opacity duration-700">
-          <Velaris
-            height="100%"
-            bg="#07080e"
-            colors={['#1d4ed8', '#4338ca', '#6d28d9', '#07080e']}
-            speed={1.2}
-            grain={0.2}
-            className="h-full w-full"
-          />
-        </div>
-      )}
-
       {/* ── Center Content ── */}
-      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-2 z-10 relative">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-2 z-10 relative flex flex-col">
         {/* VOICE ACTIVE STATE: inline Gemini listening view */}
         {isVoiceActive ? (
-          <div className="flex h-full flex-col items-center justify-center text-center py-6 anim-fade-in">
+          <div className="flex h-full flex-col items-center justify-center text-center py-6 anim-fade-in my-auto">
 
             {/* Gemini fluid orb */}
             <div
@@ -467,23 +581,26 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
             </div>
           </div>
         ) : messages.length === 0 ? (
-          /* ── Empty state ── */
-          <div className="flex h-full flex-col items-center justify-center text-center py-6">
-            <div className="my-auto flex flex-col items-center">
-              <div className="anim-float">
-                <PhoneOrb type="fluid-wave" size="hero" />
-              </div>
-
-              <div className="mt-7 space-y-1 anim-fade-up anim-delay-200">
-                <p className="text-xs font-medium text-blue-300">Hi, I'm Aura</p>
+          /* ── Empty state centered without orb ── */
+          <div className="flex h-full flex-col items-center justify-center text-center py-6 px-2 my-auto anim-fade-in">
+            <div className="w-full max-w-sm flex flex-col items-center my-auto">
+              <div className="space-y-1 mb-6 text-center">
+                <p className="text-xs font-semibold uppercase tracking-wider text-blue-300">Hi, I'm Aura</p>
                 <h2 className="text-2xl font-bold tracking-tight text-white font-display">
-                  How can I help
-                  <br />
-                  you today?
+                  How can I help you today?
                 </h2>
+                <p className="text-xs text-zinc-300/80">
+                  Ask any question, upload a problem photo, or use voice.
+                </p>
               </div>
 
-              <div className="mt-6 flex flex-wrap justify-center gap-2 max-w-xs anim-fade-up anim-delay-300">
+              {/* Centered Search / Question Box */}
+              <div className="w-full mb-6 text-left">
+                {phoneComposer}
+              </div>
+
+              {/* Quick suggestion pills */}
+              <div className="flex flex-wrap justify-center gap-2 max-w-xs">
                 {[
                   'Explain key concepts',
                   'Quiz me for exam',
@@ -493,7 +610,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                   <button
                     key={idx}
                     onClick={() => onSendMessage(text)}
-                    className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[11px] text-zinc-300 hover:bg-white/[0.09] hover:border-blue-500/30 transition-all active:scale-95"
+                    className="rounded-full border border-white/15 bg-white/[0.06] backdrop-blur-md px-3.5 py-1.5 text-[11px] text-zinc-200 hover:bg-white/[0.12] hover:border-blue-400/40 transition-all active:scale-95 shadow-sm"
                   >
                     {text}
                   </button>
@@ -503,7 +620,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           </div>
         ) : (
           /* ── Chat stream ── */
-          <div className="space-y-4 py-4 max-w-lg mx-auto">
+          <div className="space-y-4 py-4 max-w-lg mx-auto w-full">
             {messages.map((m) => {
               const isUser = m.role === 'user';
               return (
@@ -515,7 +632,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                   <div
                     className={`rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed max-w-[85%] ${isUser
                       ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 text-white shadow-md shadow-blue-600/20'
-                      : 'border border-white/10 bg-[#141622]/95 text-zinc-200 shadow-lg'
+                      : 'border border-white/10 bg-[#121626]/90 text-zinc-200 shadow-lg backdrop-blur-md'
                       }`}
                   >
                     {/* Uploaded / Captured Image thumbnail */}
@@ -605,113 +722,13 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         )}
       </div>
 
-      {/* ── Bottom Input Bar ── */}
-      <div className="shrink-0 p-4 pb-6 z-10">
-        {/* Attached Photo Preview */}
-        {attachedImage && !isVoiceActive && (
-          <div className="mb-2 flex items-center gap-2.5 rounded-2xl border border-blue-500/30 bg-blue-950/40 p-1.5 px-3 w-fit anim-fade-up">
-            <img
-              src={attachedImage}
-              alt="Preview"
-              className="h-9 w-9 rounded-lg object-cover border border-white/20"
-            />
-            <span className="text-[11px] font-medium text-blue-200">Photo Attached</span>
-            <button
-              onClick={() => setAttachedImage(null)}
-              className="rounded-full p-1 text-zinc-400 hover:text-white"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-
-        {isVoiceActive ? (
-          /* ═══ GEMINI-STYLE INLINE VOICE BAR ═══ */
-          <div className="relative flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.04] p-1.5 pl-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-2xl transition-all">
-            <button
-              onClick={stopVoice}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
-              title="Cancel"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            <div className="flex-1 flex items-center justify-center px-2">
-              <VoiceWaveform isActive={isListening} />
-            </div>
-
-            <button
-              onClick={stopVoice}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/15"
-              title="Stop recording"
-            >
-              <Square className="h-3.5 w-3.5 fill-current" />
-            </button>
-
-            <button
-              type="button"
-              onClick={voiceTranscript ? sendVoice : startVoice}
-              disabled={!voiceTranscript && isListening}
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${voiceTranscript
-                ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110 cursor-pointer'
-                : 'bg-blue-600/50 shadow-blue-600/20 cursor-default opacity-50'
-                }`}
-              title="Send"
-            >
-              <Send className="h-4 w-4 fill-current ml-0.5" />
-            </button>
-          </div>
-        ) : (
-          /* ═══ LIQUID GLASS SEARCH / QUESTION BAR ═══ */
-          <div className="relative flex items-center gap-2 rounded-full border border-white/20 bg-white/[0.04] p-1.5 pl-3 shadow-[0_0_8px_rgba(0,0,0,0.03),0_2px_6px_rgba(0,0,0,0.08),inset_3px_3px_0.5px_-3.5px_rgba(255,255,255,0.09),inset_-3px_-3px_0.5px_-3.5px_rgba(255,255,255,0.85),inset_1px_1px_1px_-0.5px_rgba(255,255,255,0.6),inset_-1px_-1px_1px_-0.5px_rgba(255,255,255,0.6),inset_0_0_6px_6px_rgba(255,255,255,0.12),inset_0_0_2px_2px_rgba(255,255,255,0.06),0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-2xl focus-within:border-white/40 transition-all">
-            {/* Capture Photo Button */}
-            <button
-              type="button"
-              onClick={() => setIsCameraOpen(true)}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-cyan-400 transition-colors"
-              title="Capture photo"
-              aria-label="Capture photo with camera"
-            >
-              <Camera className="h-4 w-4" />
-            </button>
-
-            {/* Upload Photo Button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-blue-400 transition-colors"
-              title="Upload photo"
-              aria-label="Upload photo"
-            >
-              <ImageIcon className="h-4 w-4" />
-            </button>
-
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="ask your question"
-              className="w-full bg-transparent text-xs text-white placeholder-zinc-400 focus:outline-none"
-            />
-
-            {/* Mic / Send button */}
-            <button
-              type="button"
-              onClick={input.trim() || attachedImage ? handleSend : startVoice}
-              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-violet-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
-              title={input.trim() || attachedImage ? 'Send' : 'Voice input'}
-            >
-              {input.trim() || attachedImage ? (
-                <Send className="h-4 w-4 fill-current ml-0.5" />
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-        )}
-        <GlassFilter />
-      </div>
+      {/* ── Bottom Input Bar (rendered only during chat stream or voice mode) ── */}
+      {!isCenteredStart && (
+        <div className="shrink-0 p-4 pb-6 z-10">
+          {phoneComposer}
+        </div>
+      )}
+      <GlassFilter />
 
       {/* Camera Capture Modal */}
       <CameraCaptureModal

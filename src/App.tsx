@@ -138,11 +138,11 @@ export const App: React.FC = () => {
       {toaster}
       <Suspense fallback={<Splash />}>
         {isMobileOrTablet ? (
-          <div className="h-dvh w-full overflow-hidden bg-[#07080e]">
+          <div className="h-dvh w-full overflow-hidden bg-[#070a14]">
             <PhoneApp user={user} onSignOut={handleSignOut} onUpdateUser={handleUpdateUser} />
           </div>
         ) : (
-          <div className="fixed inset-0 h-full w-full overflow-hidden bg-[#07080e]">
+          <div className="fixed inset-0 h-full w-full overflow-hidden bg-[#070a14]">
             <DesktopApp user={user} onSignOut={handleSignOut} onUpdateUser={handleUpdateUser} />
           </div>
         )}

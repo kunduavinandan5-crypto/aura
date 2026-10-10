@@ -23,6 +23,7 @@ import { CameraCaptureModal } from '../camera/CameraCaptureModal';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { UserProfile } from '@/types';
+import { mergeTranscripts, cleanDuplicatePhrases } from '@/lib/utils';
 import { useChat } from '@/hooks/useChat';
 import { SubjectSelect } from '../SubjectSelect';
 import ReactMarkdown from 'react-markdown';
@@ -222,12 +223,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
           }
 
           sessionFinalChunk = currentFinal;
-          const combined = `${accumulatedTranscriptRef.current} ${currentFinal} ${currentInterim}`
-            .replace(/\s+/g, ' ')
-            .trim();
+          const sessionText = `${currentFinal} ${currentInterim}`.trim();
+          const merged = mergeTranscripts(accumulatedTranscriptRef.current, sessionText);
 
-          if (combined) {
-            setVoiceTranscript(combined);
+          if (merged) {
+            setVoiceTranscript(merged);
           }
         };
 
@@ -239,9 +239,10 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
         recognition.onend = () => {
           if (sessionFinalChunk) {
-            accumulatedTranscriptRef.current = `${accumulatedTranscriptRef.current} ${sessionFinalChunk}`
-              .replace(/\s+/g, ' ')
-              .trim();
+            accumulatedTranscriptRef.current = mergeTranscripts(
+              accumulatedTranscriptRef.current,
+              sessionFinalChunk
+            );
             sessionFinalChunk = '';
           }
 
@@ -329,7 +330,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     setIsListening(false);
     setIsVoiceActive(false);
 
-    const textToSend = voiceTranscript.trim() || accumulatedTranscriptRef.current.trim();
+    const textToSend = cleanDuplicatePhrases(
+      voiceTranscript.trim() || accumulatedTranscriptRef.current.trim()
+    );
     if (textToSend) {
       handleSendMessage(textToSend);
     }
@@ -645,16 +648,16 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
       </aside>
 
       {/* ── Main Canvas ── */}
-      <main className="flex flex-1 min-h-0 flex-col overflow-hidden bg-[#07080e] relative z-10">
-        {/* Animated WebGL Simplex-Noise gradient background during active chat conversation */}
-        {messages.length > 0 && !isVoiceActive && (
-          <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-50 transition-opacity duration-700">
+      <main className="flex flex-1 min-h-0 flex-col overflow-hidden bg-gradient-to-b from-[#1d1344] via-[#080d1a] to-[#05261f] relative z-10">
+        {/* Animated WebGL Simplex-Noise gradient background with celestial indigo-emerald palette */}
+        {!isVoiceActive && (
+          <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-75 transition-opacity duration-700">
             <Velaris
               height="100%"
-              bg="#07080e"
-              colors={['#1d4ed8', '#4338ca', '#6d28d9', '#07080e']}
-              speed={1.2}
-              grain={0.2}
+              bg="#070a14"
+              colors={['#24154e', '#131b3e', '#073228', '#070a14']}
+              speed={0.8}
+              grain={0.15}
               className="h-full w-full"
             />
           </div>
