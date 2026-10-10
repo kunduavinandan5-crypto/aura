@@ -43,3 +43,18 @@ export interface UserSearchRecord {
   category?: string;
   createdAt: string;
 }
+
+export interface MessageFeedback {
+  id?: string;
+  messageId: string;
+  threadId?: string | null;
+  userId?: string | null;
+  userEmail?: string | null;
+  rating: 'positive' | 'negative' | 'thumbs_up' | 'thumbs_down';
+  reason?: string | null;
+  comment?: string | null;
+  messageSnippet?: string | null;
+  subjectId?: string | null;
+  createdAt?: string;
+}
+

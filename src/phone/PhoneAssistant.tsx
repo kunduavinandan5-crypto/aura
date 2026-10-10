@@ -9,6 +9,8 @@ import {
   Plus,
   Send,
   Square,
+  ThumbsDown,
+  ThumbsUp,
   Volume2,
   VolumeX,
   X,
@@ -16,10 +18,12 @@ import {
 import { PhoneOrb } from './PhoneOrb';
 import { SubjectSelect } from '../components/SubjectSelect';
 import { CameraCaptureModal } from '../components/camera/CameraCaptureModal';
+import { FeedbackModal } from '../components/feedback/FeedbackModal';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { Message, UserProfile } from '@/types';
 import { mergeTranscripts, cleanDuplicatePhrases } from '@/lib/utils';
+import { submitMessageFeedback } from '@/lib/supabase';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 import { useGSAP } from '@gsap/react';
@@ -76,6 +80,8 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'positive' | 'negative'>>({});
+  const [feedbackModalTarget, setFeedbackModalTarget] = useState<{ messageId: string; snippet: string } | null>(null);
 
   /* ── Inline voice state ── */
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -373,7 +379,45 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
     toast.info('Speaking...');
   }, [speakingMessageId]);
 
+  /* ── Feedback Handlers ── */
+  const handleThumbsUp = useCallback(async (message: Message) => {
+    setFeedbackRatings((prev) => ({ ...prev, [message.id]: 'positive' }));
+    toast.success('Thank you for your feedback!');
+    await submitMessageFeedback({
+      messageId: message.id,
+      userId: user.id,
+      userEmail: user.email,
+      rating: 'positive',
+      messageSnippet: message.content.slice(0, 300),
+      subjectId,
+    });
+  }, [user.id, user.email, subjectId]);
 
+  const handleThumbsDownClick = useCallback((message: Message) => {
+    setFeedbackModalTarget({
+      messageId: message.id,
+      snippet: message.content.slice(0, 200),
+    });
+  }, []);
+
+  const handleFeedbackModalSubmit = useCallback(async (data: { reason: string; comment: string }) => {
+    if (!feedbackModalTarget) return;
+    const targetId = feedbackModalTarget.messageId;
+    const targetSnippet = feedbackModalTarget.snippet;
+    setFeedbackRatings((prev) => ({ ...prev, [targetId]: 'negative' }));
+    setFeedbackModalTarget(null);
+    toast.success('Feedback submitted. Thank you!');
+    await submitMessageFeedback({
+      messageId: targetId,
+      userId: user.id,
+      userEmail: user.email,
+      rating: 'negative',
+      reason: data.reason,
+      comment: data.comment,
+      messageSnippet: targetSnippet,
+      subjectId,
+    });
+  }, [feedbackModalTarget, user.id, user.email, subjectId]);
 
   const isCenteredStart = messages.length === 0 && !isVoiceActive;
 
@@ -491,7 +535,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       ref={containerRef}
       className={`relative flex h-full w-full flex-col overflow-hidden text-white select-none transition-colors duration-700 ${
         isCenteredStart
-          ? 'bg-gradient-to-b from-[#1d1344] via-[#080d1a] to-[#05261f]'
+          ? 'bg-gradient-to-b from-[#221454] via-[#080d1e] to-[#04281f]'
           : 'bg-[#07080e]'
       }`}
     >
@@ -506,16 +550,26 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
 
       {/* Animated WebGL Simplex-Noise gradient backgrounds */}
       {isCenteredStart ? (
-        /* New Celestial Indigo-Emerald Palette on Starting / New Conversation Page */
-        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-75 transition-opacity duration-700">
-          <Velaris
-            height="100%"
-            bg="#070a14"
-            colors={['#24154e', '#131b3e', '#073228', '#070a14']}
-            speed={0.8}
-            grain={0.15}
-            className="h-full w-full"
-          />
+        /* Celestial Indigo-Emerald Palette on Starting / New Conversation Page */
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden transition-opacity duration-700">
+          {/* Base full-face vibrant celestial gradient */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#26155c] via-[#090e21] to-[#052e24]" />
+
+          {/* Slight organic WebGL simplex noise animation */}
+          <div className="absolute inset-0 opacity-55 mix-blend-screen">
+            <Velaris
+              height="100%"
+              bg="#000000"
+              colors={['#452094', '#1f3478', '#0e5a47', '#052920']}
+              speed={0.4}
+              grain={0.06}
+              className="h-full w-full"
+            />
+          </div>
+
+          {/* Atmospheric luminous glow highlights */}
+          <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-64 w-[360px] rounded-full bg-indigo-500/25 blur-[100px] pointer-events-none" />
+          <div className="absolute -bottom-24 left-1/2 -translate-x-1/2 h-64 w-[360px] rounded-full bg-emerald-500/20 blur-[100px] pointer-events-none" />
         </div>
       ) : messages.length > 0 && !isVoiceActive ? (
         /* Previous Blue-Indigo-Violet Palette during Active Conversation */
@@ -683,39 +737,75 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                     )}
 
                     {!isUser && (
-                      <div className="mt-2.5 flex items-center gap-3 text-[11px] text-zinc-500 border-t border-white/5 pt-2">
-                        <button
-                          onClick={() => copyText(m.content, m.id)}
-                          className="flex items-center gap-1 hover:text-white transition-colors"
-                        >
-                          {copiedId === m.id ? (
-                            <>
-                              <Check className="h-3 w-3 text-emerald-400" />
-                              <span className="text-emerald-400 font-medium">Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="h-3 w-3" />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => speakText(m.content, m.id)}
-                          className="flex items-center gap-1 hover:text-white transition-colors"
-                        >
-                          {speakingMessageId === m.id ? (
-                            <>
-                              <VolumeX className="h-3 w-3 text-blue-400 animate-pulse" />
-                              <span className="text-blue-400 font-medium">Stop</span>
-                            </>
-                          ) : (
-                            <>
-                              <Volume2 className="h-3 w-3" />
-                              <span>Listen</span>
-                            </>
-                          )}
-                        </button>
+                      <div className="mt-2.5 flex items-center justify-between text-[11px] text-zinc-500 border-t border-white/5 pt-2">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => copyText(m.content, m.id)}
+                            className="flex items-center gap-1 hover:text-white transition-colors"
+                            title="Copy response"
+                          >
+                            {copiedId === m.id ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-400" />
+                                <span className="text-emerald-400 font-medium">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => speakText(m.content, m.id)}
+                            className="flex items-center gap-1 hover:text-white transition-colors"
+                            title="Listen to response"
+                          >
+                            {speakingMessageId === m.id ? (
+                              <>
+                                <VolumeX className="h-3 w-3 text-blue-400 animate-pulse" />
+                                <span className="text-blue-400 font-medium">Stop</span>
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="h-3 w-3" />
+                                <span>Listen</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* ── Mobile Thumbs Up / Down Feedback ── */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleThumbsUp(m)}
+                            className={`flex items-center gap-1 rounded-lg px-2 py-0.5 transition-all active:scale-90 ${
+                              feedbackRatings[m.id] === 'positive'
+                                ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 font-medium'
+                                : 'text-zinc-500 hover:text-emerald-300 hover:bg-white/5'
+                            }`}
+                            title="Good response (Thumbs up)"
+                          >
+                            <ThumbsUp className="h-3 w-3" />
+                            {feedbackRatings[m.id] === 'positive' && (
+                              <span className="text-[9px]">Helpful</span>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleThumbsDownClick(m)}
+                            className={`flex items-center gap-1 rounded-lg px-2 py-0.5 transition-all active:scale-90 ${
+                              feedbackRatings[m.id] === 'negative'
+                                ? 'text-rose-400 bg-rose-500/15 border border-rose-500/30 font-medium'
+                                : 'text-zinc-500 hover:text-rose-300 hover:bg-white/5'
+                            }`}
+                            title="Poor response (Thumbs down)"
+                          >
+                            <ThumbsDown className="h-3 w-3" />
+                            {feedbackRatings[m.id] === 'negative' && (
+                              <span className="text-[9px]">Feedback</span>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -746,6 +836,14 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         </div>
       )}
       <GlassFilter />
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        isOpen={Boolean(feedbackModalTarget)}
+        onClose={() => setFeedbackModalTarget(null)}
+        onSubmit={handleFeedbackModalSubmit}
+        messageSnippet={feedbackModalTarget?.snippet}
+      />
 
       {/* Camera Capture Modal */}
       <CameraCaptureModal

@@ -102,7 +102,42 @@ CREATE POLICY "messages: owner full access" ON public.messages
     WHERE t.id = messages.thread_id AND t.user_id = (SELECT auth.uid())
   ));
 
--- The anonymous (logged-out) role gets no table access at all.
+-- 8. MESSAGE FEEDBACK ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.message_feedback (
+  id              TEXT PRIMARY KEY,
+  message_id      TEXT,
+  thread_id       TEXT,
+  user_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_email      TEXT,
+  rating          TEXT NOT NULL CHECK (rating IN ('positive', 'negative', 'thumbs_up', 'thumbs_down')),
+  reason          TEXT,
+  comment         TEXT,
+  message_snippet TEXT,
+  subject_id      TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 9. INDEXES FOR FEEDBACK -----------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_message_feedback_created ON public.message_feedback (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_message_feedback_msg     ON public.message_feedback (message_id);
+CREATE INDEX IF NOT EXISTS idx_message_feedback_user    ON public.message_feedback (user_id);
+
+-- 10. ROW LEVEL SECURITY FOR FEEDBACK -----------------------------------------
+ALTER TABLE public.message_feedback ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "message_feedback: insert access" ON public.message_feedback;
+CREATE POLICY "message_feedback: insert access" ON public.message_feedback
+  FOR INSERT TO authenticated, anon
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "message_feedback: owner select" ON public.message_feedback;
+CREATE POLICY "message_feedback: owner select" ON public.message_feedback
+  FOR SELECT TO authenticated
+  USING (user_id IS NULL OR user_id = (SELECT auth.uid()));
+
+-- Permissions
 REVOKE ALL ON public.profiles, public.user_searches, public.threads, public.messages FROM anon;
+GRANT INSERT ON public.message_feedback TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE
-  ON public.profiles, public.user_searches, public.threads, public.messages TO authenticated;
+  ON public.profiles, public.user_searches, public.threads, public.messages, public.message_feedback TO authenticated;
+

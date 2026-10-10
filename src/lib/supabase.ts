@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
-import { Message, Thread, UserProfile, UserSearchRecord } from '@/types';
+import { Message, Thread, UserProfile, UserSearchRecord, MessageFeedback } from '@/types';
 import { newId } from './id';
 
 /**
@@ -268,3 +268,51 @@ export async function deleteRemoteUserData(userId: string): Promise<boolean> {
   ]);
   return !searches.error && !threads.error;
 }
+
+/* ─────────────────────────── Feedback ─────────────────────────── */
+
+/**
+ * Submit thumbs up/down user feedback for an AI response to the message_feedback table.
+ */
+export async function submitMessageFeedback(feedback: MessageFeedback): Promise<boolean> {
+  const id = feedback.id || newId('fb');
+
+  // Cache locally in localStorage for backup/offline durability
+  try {
+    const raw = localStorage.getItem('aura_feedback_history');
+    const history = raw ? JSON.parse(raw) : [];
+    history.push({ ...feedback, id, createdAt: new Date().toISOString() });
+    localStorage.setItem('aura_feedback_history', JSON.stringify(history.slice(-100)));
+  } catch (_) {}
+
+  if (!supabase) return true;
+
+  try {
+    const validUuid = feedback.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(feedback.userId)
+      ? feedback.userId
+      : null;
+
+    const { error } = await supabase.from('message_feedback').insert({
+      id,
+      message_id: feedback.messageId,
+      thread_id: feedback.threadId || null,
+      user_id: validUuid,
+      user_email: feedback.userEmail || null,
+      rating: feedback.rating,
+      reason: feedback.reason || null,
+      comment: feedback.comment || null,
+      message_snippet: feedback.messageSnippet ? feedback.messageSnippet.slice(0, 1000) : null,
+      subject_id: feedback.subjectId || null,
+    });
+
+    if (error) {
+      console.warn('Supabase submitMessageFeedback error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase submitMessageFeedback exception:', err);
+    return false;
+  }
+}
+
