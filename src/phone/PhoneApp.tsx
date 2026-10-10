@@ -29,14 +29,14 @@ export const PhoneApp: React.FC<PhoneAppProps> = ({ user, onSignOut, onUpdateUse
 
   if (isVoiceModeOpen) {
     return (
-      <div className="h-full w-full overflow-hidden bg-[#070a14]">
+      <div className="h-full w-full overflow-hidden bg-[#07080e]">
         <PhoneVoiceMode onClose={closeVoiceMode} onVoiceTranscription={handleSendMessage} />
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-[#070a14]">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-[#07080e]">
       <PhoneAssistant
         user={user}
         messages={chat.messages}

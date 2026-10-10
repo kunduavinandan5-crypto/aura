@@ -543,7 +543,13 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   );
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#07080e] text-white select-none relative">
+    <div
+      className={`relative flex h-full w-full overflow-hidden text-white select-none transition-colors duration-700 ${
+        isCenteredStart
+          ? 'bg-gradient-to-b from-[#1d1344] via-[#080d1a] to-[#05261f]'
+          : 'bg-[#07080e]'
+      }`}
+    >
       {/* Hidden file input for uploading photos */}
       <input
         ref={fileInputRef}
@@ -553,115 +559,134 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
         className="hidden"
       />
 
+      {/* ═══ FULL FACE BACKGROUND LAYER (Fixed across entire window) ═══ */}
+      {isCenteredStart ? (
+        /* New Celestial Indigo-Emerald Palette on Starting / New Conversation Page */
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-75 transition-opacity duration-700">
+          <Velaris
+            height="100%"
+            bg="#070a14"
+            colors={['#24154e', '#131b3e', '#073228', '#070a14']}
+            speed={0.8}
+            grain={0.15}
+            className="h-full w-full"
+          />
+        </div>
+      ) : messages.length > 0 && !isVoiceActive ? (
+        /* Previous Blue-Indigo-Violet Palette during Active Conversation */
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-50 transition-opacity duration-700">
+          <Velaris
+            height="100%"
+            bg="#07080e"
+            colors={['#1d4ed8', '#4338ca', '#6d28d9', '#07080e']}
+            speed={1.2}
+            grain={0.2}
+            className="h-full w-full"
+          />
+        </div>
+      ) : null}
+
       {/* Ambient background glow */}
-      <div className="absolute -top-40 left-1/4 h-96 w-96 rounded-full bg-blue-600/10 blur-[140px] pointer-events-none" />
-      <div className="absolute -bottom-40 right-1/4 h-96 w-96 rounded-full bg-violet-600/10 blur-[140px] pointer-events-none" />
+      <div className="fixed -top-40 left-1/4 h-96 w-96 rounded-full bg-blue-600/10 blur-[140px] pointer-events-none z-0" />
+      <div className="fixed -bottom-40 right-1/4 h-96 w-96 rounded-full bg-violet-600/10 blur-[140px] pointer-events-none z-0" />
 
       {/* ── Sidebar ── */}
       <aside
-        className={`flex h-full flex-col justify-between border-r border-white/[0.06] bg-[#0b0d16]/95 backdrop-blur-2xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-20 ${isSidebarOpen ? 'w-64 p-4' : 'w-0 overflow-hidden border-none p-0'
-          }`}
+        className={`relative shrink-0 flex h-full flex-col justify-between border-r border-white/[0.08] bg-[#080b14]/70 backdrop-blur-2xl transition-[width,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-20 overflow-hidden ${
+          isSidebarOpen ? 'w-64 opacity-100' : 'w-0 opacity-0 border-transparent pointer-events-none'
+        }`}
       >
-        <div className="flex flex-col flex-1 min-h-0 space-y-4 overflow-y-auto">
-          <div className="flex items-center justify-between px-1">
-            <div
-              className="flex items-center gap-2 cursor-pointer group"
-              onClick={() => setActiveThreadId(null)}
-            >
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 transition-transform group-hover:scale-105">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <span className="text-base font-bold tracking-tight text-white font-display">
-                Aura AI
-              </span>
-            </div>
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white transition-colors"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-          </div>
-
-          <button
-            onClick={() => setActiveThreadId(null)}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:brightness-105 active:scale-[0.98]"
-          >
-            <Plus className="h-4 w-4" /> <span>New Conversation</span>
-          </button>
-
-          <div className="space-y-1.5 pt-2 flex-1 min-h-0 flex flex-col">
-            <div className="px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-              RECENT CHATS
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-              {threads.length === 0 ? (
-                <div className="px-2 py-6 text-center text-xs text-zinc-600">
-                  No conversations yet
+        <div className="w-64 flex flex-col justify-between h-full p-4 shrink-0">
+          <div className="flex flex-col flex-1 min-h-0 space-y-4 overflow-y-auto">
+            <div className="flex items-center justify-between px-1">
+              <div
+                className="flex items-center gap-2 cursor-pointer group"
+                onClick={() => setActiveThreadId(null)}
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 transition-transform group-hover:scale-105">
+                  <Sparkles className="h-4 w-4" />
                 </div>
-              ) : (
-                threads.map((t) => (
-                  <div key={t.id} className="group relative">
-                    <button
-                      onClick={() => setActiveThreadId(t.id)}
-                      className={`flex w-full items-center gap-2.5 rounded-xl py-2 pl-3 pr-9 text-left text-xs transition-all ${activeThreadId === t.id
-                        ? 'bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30'
-                        : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                        }`}
-                    >
-                      <MessageSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                      <span className="truncate">{t.title}</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Delete "${t.title}"? This cannot be undone.`)) void deleteThread(t.id);
-                      }}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 opacity-0 transition-all hover:bg-red-500/15 hover:text-red-400 focus:opacity-100 group-hover:opacity-100"
-                      title="Delete conversation"
-                      aria-label={`Delete conversation ${t.title}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                <span className="text-base font-bold tracking-tight text-white font-display">
+                  Aura AI
+                </span>
+              </div>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white transition-colors"
+              >
+                <Menu className="h-4 w-4" />
+              </button>
+            </div>
+
+            <button
+              onClick={() => setActiveThreadId(null)}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:brightness-105 active:scale-[0.98]"
+            >
+              <Plus className="h-4 w-4" /> <span>New Conversation</span>
+            </button>
+
+            <div className="space-y-1.5 pt-2 flex-1 min-h-0 flex flex-col">
+              <div className="px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                RECENT CHATS
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+                {threads.length === 0 ? (
+                  <div className="px-2 py-6 text-center text-xs text-zinc-600">
+                    No conversations yet
                   </div>
-                ))
-              )}
+                ) : (
+                  threads.map((t) => (
+                    <div key={t.id} className="group relative">
+                      <button
+                        onClick={() => setActiveThreadId(t.id)}
+                        className={`flex w-full items-center gap-2.5 rounded-xl py-2 pl-3 pr-9 text-left text-xs transition-all ${
+                          activeThreadId === t.id
+                            ? 'bg-blue-600/20 text-blue-300 font-semibold border border-blue-500/30'
+                            : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                        <span className="truncate">{t.title}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Delete "${t.title}"? This cannot be undone.`))
+                            void deleteThread(t.id);
+                        }}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-500 opacity-0 transition-all hover:bg-red-500/15 hover:text-red-400 focus:opacity-100 group-hover:opacity-100"
+                        title="Delete conversation"
+                        aria-label={`Delete conversation ${t.title}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Sidebar Footer */}
-        <div className="border-t border-white/[0.06] pt-3 space-y-1">
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs text-zinc-400 hover:bg-white/5 hover:text-white transition-all"
-          >
-            <Settings className="h-4 w-4" />
-            <span>Settings & Profile</span>
-          </button>
-          <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-zinc-500">
-            <span className="truncate font-medium text-zinc-400">{user.name}</span>
-            <button onClick={onSignOut} className="text-red-400 hover:underline">
-              Sign out
+          {/* Sidebar Footer */}
+          <div className="border-t border-white/[0.06] pt-3 space-y-1">
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs text-zinc-400 hover:bg-white/5 hover:text-white transition-all"
+            >
+              <Settings className="h-4 w-4" />
+              <span>Settings & Profile</span>
             </button>
+            <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-zinc-500">
+              <span className="truncate font-medium text-zinc-400">{user.name}</span>
+              <button onClick={onSignOut} className="text-red-400 hover:underline">
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
       </aside>
 
       {/* ── Main Canvas ── */}
-      <main className="flex flex-1 min-h-0 flex-col overflow-hidden bg-gradient-to-b from-[#1d1344] via-[#080d1a] to-[#05261f] relative z-10">
-        {/* Animated WebGL Simplex-Noise gradient background with celestial indigo-emerald palette */}
-        {!isVoiceActive && (
-          <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-75 transition-opacity duration-700">
-            <Velaris
-              height="100%"
-              bg="#070a14"
-              colors={['#24154e', '#131b3e', '#073228', '#070a14']}
-              speed={0.8}
-              grain={0.15}
-              className="h-full w-full"
-            />
-          </div>
-        )}
+      <main className="flex flex-1 min-h-0 flex-col overflow-hidden bg-transparent relative z-10">
 
         {/* Top Header */}
         <header className="flex h-14 shrink-0 items-center justify-between px-6 relative z-10">

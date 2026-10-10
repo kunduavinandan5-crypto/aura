@@ -489,7 +489,11 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full w-full flex-col overflow-hidden bg-gradient-to-b from-[#1d1344] via-[#080d1a] to-[#05261f] text-white select-none"
+      className={`relative flex h-full w-full flex-col overflow-hidden text-white select-none transition-colors duration-700 ${
+        isCenteredStart
+          ? 'bg-gradient-to-b from-[#1d1344] via-[#080d1a] to-[#05261f]'
+          : 'bg-[#07080e]'
+      }`}
     >
       {/* Hidden File Input */}
       <input
@@ -500,8 +504,9 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         className="hidden"
       />
 
-      {/* Atmospheric gradient overlay with Velaris WebGL simplex noise */}
-      {!isVoiceActive && (
+      {/* Animated WebGL Simplex-Noise gradient backgrounds */}
+      {isCenteredStart ? (
+        /* New Celestial Indigo-Emerald Palette on Starting / New Conversation Page */
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-75 transition-opacity duration-700">
           <Velaris
             height="100%"
@@ -512,7 +517,19 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
             className="h-full w-full"
           />
         </div>
-      )}
+      ) : messages.length > 0 && !isVoiceActive ? (
+        /* Previous Blue-Indigo-Violet Palette during Active Conversation */
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-50 transition-opacity duration-700">
+          <Velaris
+            height="100%"
+            bg="#07080e"
+            colors={['#1d4ed8', '#4338ca', '#6d28d9', '#07080e']}
+            speed={1.2}
+            grain={0.2}
+            className="h-full w-full"
+          />
+        </div>
+      ) : null}
 
       {/* ── Top Header ── */}
       <header className="relative flex h-16 w-full shrink-0 items-center justify-between px-5 pt-2 z-30">
