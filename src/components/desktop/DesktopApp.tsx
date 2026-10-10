@@ -82,6 +82,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   /* ── Inline voice state ── */
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -308,15 +309,56 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const speakText = (text: string) => {
-    if ('speechSynthesis' in window) {
+  const toggleMute = useCallback(() => {
+    if ('speechSynthesis' in window && (window.speechSynthesis.speaking || speakingMessageId)) {
       window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(
-        new SpeechSynthesisUtterance(text.replace(/[`#*_$\-\[\]()]/g, ''))
-      );
-      toast.info('Speaking...');
+      setSpeakingMessageId(null);
+      setIsMuted(true);
+      toast.info('Audio muted and stopped');
+      return;
     }
-  };
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if (nextMuted && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+    }
+    toast.info(nextMuted ? 'Audio muted' : 'Audio enabled');
+  }, [isMuted, speakingMessageId]);
+
+  const speakText = useCallback((text: string, messageId?: string) => {
+    if (!('speechSynthesis' in window)) {
+      toast.error('Speech synthesis not supported in this browser');
+      return;
+    }
+
+    if (speakingMessageId === messageId || (window.speechSynthesis.speaking && !messageId)) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+      toast.info('Stopped speaking');
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    setIsMuted(false);
+
+    const cleanText = text.replace(/[`#*_$\-\[\]()]/g, '').trim();
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    if (messageId) {
+      setSpeakingMessageId(messageId);
+    }
+    utterance.onend = () => {
+      setSpeakingMessageId(null);
+    };
+    utterance.onerror = () => {
+      setSpeakingMessageId(null);
+    };
+
+    window.speechSynthesis.speak(utterance);
+    toast.info('Speaking...');
+  }, [speakingMessageId]);
 
   const isCenteredStart = messages.length === 0 && !isVoiceActive;
 
@@ -576,14 +618,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                setIsMuted(!isMuted);
-                toast.info(isMuted ? 'Audio enabled' : 'Audio muted');
-              }}
+              onClick={toggleMute}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/5 hover:text-white transition-colors"
-              title={isMuted ? 'Unmute voice answers' : 'Mute voice answers'}
+              title={isMuted ? 'Unmute voice answers' : 'Mute / Stop audio'}
             >
-              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4 text-blue-400" />}
             </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
@@ -640,20 +679,19 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
               </div>
             </div>
           ) : messages.length === 0 ? (
-            /* Empty state with fluid orb and question suggestions */
-            <div className="flex min-h-full flex-col items-center justify-center text-center max-w-3xl mx-auto">
-              <div className="anim-float mb-4">
-                <PhoneOrb type="fluid-wave" size="hero" />
+            /* Empty state centered on front page without orb */
+            <div className="flex min-h-full flex-col items-center justify-center text-center max-w-3xl mx-auto px-4 py-8 my-auto anim-fade-in">
+              <div className="space-y-2 mb-8">
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-display">
+                  How can I help you study today?
+                </h1>
+                <p className="text-sm text-zinc-400 max-w-md mx-auto">
+                  Ask any question, upload or capture a photo of a problem, or use voice.
+                </p>
               </div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-white font-display">
-                How can I help you study today?
-              </h1>
-              <p className="mt-2 text-sm text-zinc-400">
-                Ask any question, upload or capture a photo of a problem, or use voice.
-              </p>
 
-              {/* Input bar sits in the middle of the start screen */}
-              <div className="mt-8 w-full text-left">{composer}</div>
+              {/* Input bar sits prominently in the center of the start screen */}
+              <div className="w-full text-left">{composer}</div>
 
               <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
                 {[
@@ -758,11 +796,20 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                             )}
                           </button>
                           <button
-                            onClick={() => speakText(m.content)}
+                            onClick={() => speakText(m.content, m.id)}
                             className="flex items-center gap-1.5 hover:text-white transition-colors"
                           >
-                            <Volume2 className="h-3.5 w-3.5" />
-                            <span>Listen</span>
+                            {speakingMessageId === m.id ? (
+                              <>
+                                <VolumeX className="h-3.5 w-3.5 text-blue-400 animate-pulse" />
+                                <span className="text-blue-400 font-medium">Stop</span>
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="h-3.5 w-3.5" />
+                                <span>Listen</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       )}

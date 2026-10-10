@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Camera,
+  Check,
+  Copy,
   Image as ImageIcon,
   Menu,
   Mic,
@@ -71,6 +73,8 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   /* ── Inline voice state ── */
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -89,7 +93,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       isVoiceActiveRef.current = false;
       try {
         recognitionRef.current?.stop();
-      } catch (_) {}
+      } catch (_) { }
     };
   }, []);
 
@@ -174,7 +178,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         if (isVoiceActiveRef.current) {
           try {
             recognition.start();
-          } catch (_) {}
+          } catch (_) { }
         } else {
           setIsListening(false);
         }
@@ -246,6 +250,66 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
     toast.success('Photo captured');
   };
 
+  const copyText = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    toast.success('Copied');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const toggleMute = useCallback(() => {
+    if ('speechSynthesis' in window && (window.speechSynthesis.speaking || speakingMessageId)) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+      setIsMuted(true);
+      toast.info('Audio muted and stopped');
+      return;
+    }
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if (nextMuted && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+    }
+    toast.info(nextMuted ? 'Audio muted' : 'Audio enabled');
+  }, [isMuted, speakingMessageId]);
+
+  const speakText = useCallback((text: string, messageId?: string) => {
+    if (!('speechSynthesis' in window)) {
+      toast.error('Speech synthesis not supported in this browser');
+      return;
+    }
+
+    if (speakingMessageId === messageId || (window.speechSynthesis.speaking && !messageId)) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+      toast.info('Stopped speaking');
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    setIsMuted(false);
+
+    const cleanText = text.replace(/[`#*_$\-\[\]()]/g, '').trim();
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    if (messageId) {
+      setSpeakingMessageId(messageId);
+    }
+    utterance.onend = () => {
+      setSpeakingMessageId(null);
+    };
+    utterance.onerror = () => {
+      setSpeakingMessageId(null);
+    };
+
+    window.speechSynthesis.speak(utterance);
+    toast.info('Speaking...');
+  }, [speakingMessageId]);
+
+
+
   return (
     <div
       ref={containerRef}
@@ -272,13 +336,11 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         <SubjectSelect variant="header" value={subjectId} onChange={onSubjectChange} disabled={isGenerating} />
 
         <button
-          onClick={() => {
-            setIsMuted(!isMuted);
-            toast.info(isMuted ? 'Audio on' : 'Audio muted');
-          }}
+          onClick={toggleMute}
           className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 backdrop-blur-md transition-all active:scale-95"
+          title={isMuted ? 'Unmute voice answers' : 'Mute / Stop audio'}
         >
-          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4 text-blue-400" />}
         </button>
       </header>
 
@@ -423,6 +485,43 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                         ))}
                       </div>
                     )}
+
+                    {!isUser && (
+                      <div className="mt-2.5 flex items-center gap-3 text-[11px] text-zinc-500 border-t border-white/5 pt-2">
+                        <button
+                          onClick={() => copyText(m.content, m.id)}
+                          className="flex items-center gap-1 hover:text-white transition-colors"
+                        >
+                          {copiedId === m.id ? (
+                            <>
+                              <Check className="h-3 w-3 text-emerald-400" />
+                              <span className="text-emerald-400 font-medium">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => speakText(m.content, m.id)}
+                          className="flex items-center gap-1 hover:text-white transition-colors"
+                        >
+                          {speakingMessageId === m.id ? (
+                            <>
+                              <VolumeX className="h-3 w-3 text-blue-400 animate-pulse" />
+                              <span className="text-blue-400 font-medium">Stop</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="h-3 w-3" />
+                              <span>Listen</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -491,11 +590,10 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
               type="button"
               onClick={voiceTranscript ? sendVoice : startVoice}
               disabled={!voiceTranscript && isListening}
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${
-                voiceTranscript
-                  ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110 cursor-pointer'
-                  : 'bg-blue-600/50 shadow-blue-600/20 cursor-default opacity-50'
-              }`}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-95 ${voiceTranscript
+                ? 'bg-blue-500 shadow-blue-500/40 hover:brightness-110 cursor-pointer'
+                : 'bg-blue-600/50 shadow-blue-600/20 cursor-default opacity-50'
+                }`}
               title="Send"
             >
               <Send className="h-4 w-4 fill-current ml-0.5" />
