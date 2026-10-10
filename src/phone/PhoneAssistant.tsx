@@ -23,7 +23,7 @@ import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { Message, UserProfile } from '@/types';
 import { mergeTranscripts, cleanDuplicatePhrases } from '@/lib/utils';
-import { submitMessageFeedback } from '@/lib/supabase';
+import { submitMessageFeedback, getSavedFeedbackRatings, saveFeedbackRating } from '@/lib/supabase';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 import { useGSAP } from '@gsap/react';
@@ -80,7 +80,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
-  const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'positive' | 'negative'>>({});
+  const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'positive' | 'negative'>>(() => getSavedFeedbackRatings());
   const [feedbackModalTarget, setFeedbackModalTarget] = useState<{ messageId: string; snippet: string } | null>(null);
 
   /* ── Inline voice state ── */
@@ -381,7 +381,15 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
 
   /* ── Feedback Handlers ── */
   const handleThumbsUp = useCallback(async (message: Message) => {
-    setFeedbackRatings((prev) => ({ ...prev, [message.id]: 'positive' }));
+    if (feedbackRatings[message.id]) {
+      toast.info('Feedback already recorded for this response');
+      return;
+    }
+    setFeedbackRatings((prev) => {
+      const next = { ...prev, [message.id]: 'positive' as const };
+      saveFeedbackRating(message.id, 'positive');
+      return next;
+    });
     toast.success('Thank you for your feedback!');
     await submitMessageFeedback({
       messageId: message.id,
@@ -391,21 +399,29 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       messageSnippet: message.content.slice(0, 300),
       subjectId,
     });
-  }, [user.id, user.email, subjectId]);
+  }, [feedbackRatings, user.id, user.email, subjectId]);
 
   const handleThumbsDownClick = useCallback((message: Message) => {
+    if (feedbackRatings[message.id]) {
+      toast.info('Feedback already recorded for this response');
+      return;
+    }
     setFeedbackModalTarget({
       messageId: message.id,
       snippet: message.content.slice(0, 200),
     });
-  }, []);
+  }, [feedbackRatings]);
 
   const handleFeedbackModalSubmit = useCallback(async (data: { reason: string; comment: string }) => {
     if (!feedbackModalTarget) return;
     const targetId = feedbackModalTarget.messageId;
     const targetSnippet = feedbackModalTarget.snippet;
-    setFeedbackRatings((prev) => ({ ...prev, [targetId]: 'negative' }));
     setFeedbackModalTarget(null);
+    setFeedbackRatings((prev) => {
+      const next = { ...prev, [targetId]: 'negative' as const };
+      saveFeedbackRating(targetId, 'negative');
+      return next;
+    });
     toast.success('Feedback submitted. Thank you!');
     await submitMessageFeedback({
       messageId: targetId,
@@ -775,34 +791,42 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                           </button>
                         </div>
 
-                        {/* ── Mobile Thumbs Up / Down Feedback ── */}
+                        {/* ── Mobile Thumbs Up / Down Feedback (One-time submission) ── */}
                         <div className="flex items-center gap-1">
                           <button
+                            type="button"
                             onClick={() => handleThumbsUp(m)}
-                            className={`flex items-center gap-1 rounded-lg px-2 py-0.5 transition-all active:scale-90 ${
+                            disabled={Boolean(feedbackRatings[m.id])}
+                            className={`flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs transition-all ${
                               feedbackRatings[m.id] === 'positive'
-                                ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 font-medium'
-                                : 'text-zinc-500 hover:text-emerald-300 hover:bg-white/5'
+                                ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 font-medium cursor-default shadow-sm'
+                                : feedbackRatings[m.id] === 'negative'
+                                ? 'text-zinc-600 opacity-35 cursor-not-allowed pointer-events-none'
+                                : 'text-zinc-500 hover:text-emerald-300 hover:bg-white/5 active:scale-90'
                             }`}
-                            title="Good response (Thumbs up)"
+                            title={feedbackRatings[m.id] ? 'Feedback already submitted' : 'Good response (Thumbs up)'}
                           >
                             <ThumbsUp className="h-3 w-3" />
                             {feedbackRatings[m.id] === 'positive' && (
-                              <span className="text-[9px]">Helpful</span>
+                              <span className="text-[9px] font-medium">Helpful</span>
                             )}
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleThumbsDownClick(m)}
-                            className={`flex items-center gap-1 rounded-lg px-2 py-0.5 transition-all active:scale-90 ${
+                            disabled={Boolean(feedbackRatings[m.id])}
+                            className={`flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs transition-all ${
                               feedbackRatings[m.id] === 'negative'
-                                ? 'text-rose-400 bg-rose-500/15 border border-rose-500/30 font-medium'
-                                : 'text-zinc-500 hover:text-rose-300 hover:bg-white/5'
+                                ? 'text-rose-400 bg-rose-500/20 border border-rose-500/30 font-medium cursor-default shadow-sm'
+                                : feedbackRatings[m.id] === 'positive'
+                                ? 'text-zinc-600 opacity-35 cursor-not-allowed pointer-events-none'
+                                : 'text-zinc-500 hover:text-rose-300 hover:bg-white/5 active:scale-90'
                             }`}
-                            title="Poor response (Thumbs down)"
+                            title={feedbackRatings[m.id] ? 'Feedback already submitted' : 'Poor response (Thumbs down)'}
                           >
                             <ThumbsDown className="h-3 w-3" />
                             {feedbackRatings[m.id] === 'negative' && (
-                              <span className="text-[9px]">Feedback</span>
+                              <span className="text-[9px] font-medium">Reported</span>
                             )}
                           </button>
                         </div>

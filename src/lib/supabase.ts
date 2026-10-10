@@ -316,3 +316,29 @@ export async function submitMessageFeedback(feedback: MessageFeedback): Promise<
   }
 }
 
+const FEEDBACK_RATINGS_STORAGE_KEY = 'aura_rated_messages';
+
+/**
+ * Retrieve map of messageId -> rating ('positive' | 'negative') already submitted by the user.
+ */
+export function getSavedFeedbackRatings(): Record<string, 'positive' | 'negative'> {
+  try {
+    const raw = localStorage.getItem(FEEDBACK_RATINGS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+/**
+ * Persist feedback state for a message to ensure it cannot be submitted twice.
+ */
+export function saveFeedbackRating(messageId: string, rating: 'positive' | 'negative'): void {
+  try {
+    const current = getSavedFeedbackRatings();
+    current[messageId] = rating;
+    localStorage.setItem(FEEDBACK_RATINGS_STORAGE_KEY, JSON.stringify(current));
+  } catch (_) {}
+}
+
+
