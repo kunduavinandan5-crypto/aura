@@ -1,5 +1,6 @@
 import { Thread, UserProfile, UserSearchRecord } from '@/types';
 import { newId } from './id';
+import { clearMessageImages, deleteMessageImages } from './imageStore';
 import {
   deleteRemoteThread,
   deleteRemoteUserData,
@@ -56,7 +57,7 @@ export const storage = {
     return read<Thread[]>(THREADS_KEY, []);
   },
 
-  /** Persists locally right away; cloud sync is debounced. Image attachments are never persisted. */
+  /** Persists locally right away; cloud sync is debounced. Image attachments are kept out of this store (see imageStore.ts: device-local IndexedDB). */
   saveThreads(threads: Thread[], userId?: string): void {
     const slim = threads.map((t) => ({
       ...t,
@@ -99,6 +100,8 @@ export const storage = {
 
   /** Delete one conversation locally (caller updates state) and in the cloud, retrying later if offline. */
   async deleteThread(threadId: string): Promise<void> {
+    const doomed = this.getThreads().find((t) => t.id === threadId);
+    if (doomed) void deleteMessageImages(doomed.messages.map((m) => m.id));
     write(THREADS_KEY, this.getThreads().filter((t) => t.id !== threadId));
     const ok = await deleteRemoteThread(threadId).catch(() => false);
     if (!ok) write(PENDING_DELETES_KEY, [...new Set([...read<string[]>(PENDING_DELETES_KEY, []), threadId])]);
@@ -119,6 +122,7 @@ export const storage = {
     clearTimeout(syncTimer);
     localStorage.removeItem(THREADS_KEY);
     localStorage.removeItem(SEARCHES_KEY);
+    void clearMessageImages();
     if (userId) await deleteRemoteUserData(userId);
   },
 
@@ -126,6 +130,7 @@ export const storage = {
   wipeLocal(): void {
     clearTimeout(syncTimer);
     [THREADS_KEY, SEARCHES_KEY, USER_KEY, ...LEGACY_KEYS].forEach((k) => localStorage.removeItem(k));
+    void clearMessageImages();
   },
 
   /** Pull chats and searches from Supabase down to local state. */

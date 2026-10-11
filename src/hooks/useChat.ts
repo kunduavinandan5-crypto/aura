@@ -5,6 +5,7 @@ import { storage } from '@/lib/storage';
 import { generateAiResponse } from '@/lib/ai-engine';
 import { newId } from '@/lib/id';
 import { getSubject, loadSubjectId, saveSubjectId } from '@/lib/subjects';
+import { loadAllMessageImages, saveMessageImages } from '@/lib/imageStore';
 
 const FALLBACK_REPLY =
   "Sorry, I couldn't get an answer just now. Please check your connection and try again.";
@@ -31,6 +32,23 @@ export function useChat(user: UserProfile) {
     storage.saveThreads(threads, user.id);
   }, [threads, user.id]);
 
+  /* Photos live in IndexedDB (not in the saved threads); restore them onto their messages on startup. */
+  useEffect(() => {
+    let cancelled = false;
+    loadAllMessageImages().then((byMessage) => {
+      if (cancelled || !Object.keys(byMessage).length) return;
+      setThreads((prev) =>
+        prev.map((t) => ({
+          ...t,
+          messages: t.messages.map((m) => (byMessage[m.id] && !m.imageUrls ? { ...m, imageUrls: byMessage[m.id] } : m)),
+        }))
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const activeThread = threads.find((t) => t.id === activeThreadId);
   const messages = activeThread?.messages ?? [];
 
@@ -52,8 +70,10 @@ export function useChat(user: UserProfile) {
 
       storage.recordSearch(prompt, user.id, subject.label);
 
+
       const now = new Date().toISOString();
       const userMessage: Message = { id: newId('msg'), role: 'user', content: prompt, imageUrls: images, createdAt: now };
+      if (images?.length) void saveMessageImages(userMessage.id, images);
       const assistantId = newId('msg');
       const placeholder: Message = { id: assistantId, role: 'assistant', content: '', createdAt: now };
 
