@@ -19,7 +19,7 @@ import { PhoneOrb } from './PhoneOrb';
 import { SubjectSelect } from '../components/SubjectSelect';
 import { CameraCaptureModal } from '../components/camera/CameraCaptureModal';
 import { FeedbackModal } from '../components/feedback/FeedbackModal';
-import { MAX_IMAGES, readImageFiles } from '@/lib/attachments';
+import { MAX_IMAGES, openImageInNewTab, readImageFiles } from '@/lib/attachments';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { Message, UserProfile } from '@/types';
@@ -747,7 +747,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                               src={url}
                               alt={`Uploaded question ${i + 1}`}
                               className={`w-auto max-w-full rounded-xl object-contain cursor-pointer ${m.imageUrls!.length > 1 ? 'max-h-28' : 'max-h-56'}`}
-                              onClick={() => window.open(url, '_blank')}
+                              onClick={() => openImageInNewTab(url)}
                             />
                           </div>
                         ))}

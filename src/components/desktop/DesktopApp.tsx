@@ -22,7 +22,7 @@ import {
 import { PhoneOrb } from '@/phone/PhoneOrb';
 import { SettingsModal } from '../settings/SettingsModal';
 import { CameraCaptureModal } from '../camera/CameraCaptureModal';
-import { MAX_IMAGES, readImageFiles } from '@/lib/attachments';
+import { MAX_IMAGES, openImageInNewTab, readImageFiles } from '@/lib/attachments';
 import { FeedbackModal } from '../feedback/FeedbackModal';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
@@ -940,7 +940,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                                 src={url}
                                 alt={`Uploaded question ${i + 1}`}
                                 className={`w-auto max-w-full rounded-xl object-contain cursor-pointer hover:opacity-95 transition-opacity ${m.imageUrls!.length > 1 ? 'max-h-36' : 'max-h-72'}`}
-                                onClick={() => window.open(url, '_blank')}
+                                onClick={() => openImageInNewTab(url)}
                               />
                             </div>
                           ))}

@@ -31,3 +31,17 @@ export async function readImageFiles(files: File[], existingCount: number): Prom
     return [];
   }
 }
+
+/** Opens an attached photo in a new tab. Browsers block top-level navigation to data: URLs, so use a blob URL. */
+export function openImageInNewTab(dataUrl: string): void {
+  try {
+    const [header, base64] = dataUrl.split(',');
+    const mime = /data:([^;]+)/.exec(header)?.[1] ?? 'image/jpeg';
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    toast.error('Could not open the photo');
+  }
+}
