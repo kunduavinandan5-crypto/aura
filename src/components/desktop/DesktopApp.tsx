@@ -22,6 +22,7 @@ import {
 import { PhoneOrb } from '@/phone/PhoneOrb';
 import { SettingsModal } from '../settings/SettingsModal';
 import { CameraCaptureModal } from '../camera/CameraCaptureModal';
+import { MAX_IMAGES, readImageFiles } from '@/lib/attachments';
 import { FeedbackModal } from '../feedback/FeedbackModal';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
@@ -83,7 +84,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   } = useChat(user);
 
   const [input, setInput] = useState('');
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -143,8 +144,15 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
             const reader = new FileReader();
             reader.onload = (event) => {
               if (event.target?.result) {
-                setAttachedImage(event.target.result as string);
-                toast.success('Photo pasted from clipboard');
+                const dataUrl = event.target.result as string;
+                setAttachedImages((prev) => {
+                  if (prev.length >= MAX_IMAGES) {
+                    toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+                    return prev;
+                  }
+                  toast.success('Photo pasted from clipboard');
+                  return [...prev, dataUrl];
+                });
               }
             };
             reader.readAsDataURL(blob);
@@ -302,16 +310,16 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   const handleSendMessage = useCallback(
     (text?: string) => {
       const msgText = (text !== undefined ? text : input).trim();
-      const image = attachedImage || undefined;
-      if ((!msgText && !image) || isGenerating) return;
+      const images = attachedImages.length ? attachedImages : undefined;
+      if ((!msgText && !images) || isGenerating) return;
       if (!subjectId) {
         toast.error('Please select a subject before asking a question.');
         return;
       }
 
       setInput('');
-      setAttachedImage(null);
-      void sendMessage(msgText, image).then((reply) => {
+      setAttachedImages([]);
+      void sendMessage(msgText, images).then((reply) => {
         if (reply && !isMuted && 'speechSynthesis' in window) {
           window.speechSynthesis.cancel();
           window.speechSynthesis.speak(
@@ -320,7 +328,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
         }
       });
     },
-    [input, attachedImage, isGenerating, subjectId, sendMessage, isMuted]
+    [input, attachedImages, isGenerating, subjectId, sendMessage, isMuted]
   );
 
   const sendVoice = useCallback(() => {
@@ -347,30 +355,36 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   }, [voiceTranscript, handleSendMessage]);
 
   /* ── Photo handling ── */
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setAttachedImage(event.target.result as string);
-        toast.success('Photo attached');
-      }
-    };
-    reader.readAsDataURL(file);
-    // Reset file input
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
+    if (!files.length) return;
+
+    const added = await readImageFiles(files, attachedImages.length);
+    if (added.length) {
+      setAttachedImages((prev) => [...prev, ...added].slice(0, MAX_IMAGES));
+      toast.success(added.length > 1 ? `${added.length} photos attached` : 'Photo attached');
+    }
   };
 
   const handleCapturePhoto = (imageDataUrl: string) => {
-    setAttachedImage(imageDataUrl);
-    toast.success('Photo captured');
+    setAttachedImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, imageDataUrl]));
+  };
+
+  const openPicker = () => {
+    if (attachedImages.length >= MAX_IMAGES) {
+      toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const openCamera = () => {
+    if (attachedImages.length >= MAX_IMAGES) {
+      toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+      return;
+    }
+    setIsCameraOpen(true);
   };
 
   const copyText = (text: string, id: string) => {
@@ -494,24 +508,30 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   const composer = (
     <div className="mx-auto max-w-3xl space-y-2">
       {/* Image Preview Chip if attached */}
-      {attachedImage && !isVoiceActive && (
-        <div className="flex items-center gap-3 rounded-2xl border border-blue-500/30 bg-blue-950/25 p-2 px-3 w-fit anim-fade-up">
-          <img
-            src={attachedImage}
-            alt="Attached preview"
-            className="h-12 w-12 rounded-lg object-cover border border-white/20 shadow-md"
-          />
+      {attachedImages.length > 0 && !isVoiceActive && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-blue-500/30 bg-blue-950/25 p-2 px-3 w-fit max-w-full anim-fade-up">
+          {attachedImages.map((src, i) => (
+            <div key={i} className="relative">
+              <img
+                src={src}
+                alt={`Attached preview ${i + 1}`}
+                className="h-12 w-12 rounded-lg object-cover border border-white/20 shadow-md"
+              />
+              <button
+                onClick={() => setAttachedImages((prev) => prev.filter((_, idx) => idx !== i))}
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-black/80 p-0.5 text-zinc-300 hover:text-white"
+                title="Remove image"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
           <div className="text-xs">
-            <p className="font-semibold text-white">Photo Attached</p>
+            <p className="font-semibold text-white">
+              {attachedImages.length}/{MAX_IMAGES} photos
+            </p>
             <p className="text-[10px] text-blue-300">Ready to analyze</p>
           </div>
-          <button
-            onClick={() => setAttachedImage(null)}
-            className="rounded-full p-1 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors ml-2"
-            title="Remove image"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </div>
       )}
 
@@ -555,7 +575,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
           {/* Capture Photo from Camera */}
           <button
             type="button"
-            onClick={() => setIsCameraOpen(true)}
+            onClick={openCamera}
             className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-cyan-400 transition-colors"
             title="Capture Photo with Camera"
             aria-label="Capture photo with camera"
@@ -566,7 +586,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
           {/* Upload Photo from file */}
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={openPicker}
             className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-blue-400 transition-colors"
             title="Upload Photo / Image"
             aria-label="Upload photo"
@@ -590,12 +610,12 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
           <button
             type="button"
             onClick={
-              input.trim() || attachedImage ? () => handleSendMessage(input) : startVoice
+              input.trim() || attachedImages.length ? () => handleSendMessage(input) : startVoice
             }
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-indigo-600 to-violet-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
-            title={input.trim() || attachedImage ? 'Send' : 'Voice mode'}
+            title={input.trim() || attachedImages.length ? 'Send' : 'Voice mode'}
           >
-            {input.trim() || attachedImage ? (
+            {input.trim() || attachedImages.length ? (
               <Send className="h-4 w-4 fill-current ml-0.5" />
             ) : (
               <Mic className="h-4 w-4" />
@@ -619,6 +639,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={handleFileChange}
         className="hidden"
       />
@@ -911,14 +932,18 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                         }`}
                     >
                       {/* Uploaded / Captured Image in User Message */}
-                      {m.imageUrl && (
-                        <div className="mb-3 overflow-hidden rounded-xl border border-white/15 bg-black/40">
-                          <img
-                            src={m.imageUrl}
-                            alt="Uploaded question"
-                            className="max-h-72 w-auto max-w-full rounded-xl object-contain cursor-pointer hover:opacity-95 transition-opacity"
-                            onClick={() => window.open(m.imageUrl, '_blank')}
-                          />
+                      {m.imageUrls && m.imageUrls.length > 0 && (
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {m.imageUrls.map((url, i) => (
+                            <div key={i} className="overflow-hidden rounded-xl border border-white/15 bg-black/40">
+                              <img
+                                src={url}
+                                alt={`Uploaded question ${i + 1}`}
+                                className={`w-auto max-w-full rounded-xl object-contain cursor-pointer hover:opacity-95 transition-opacity ${m.imageUrls!.length > 1 ? 'max-h-36' : 'max-h-72'}`}
+                                onClick={() => window.open(url, '_blank')}
+                              />
+                            </div>
+                          ))}
                         </div>
                       )}
 
@@ -1066,6 +1091,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onCapture={handleCapturePhoto}
+        existingCount={attachedImages.length}
       />
 
       {/* Settings Modal */}

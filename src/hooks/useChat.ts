@@ -39,8 +39,8 @@ export function useChat(user: UserProfile) {
 
   /** Sends a message and resolves with the assistant reply, or null if nothing was sent / it failed. */
   const sendMessage = useCallback(
-    async (text: string, image?: string): Promise<string | null> => {
-      const prompt = text.trim() || (image ? 'Please analyze and explain this photo.' : '');
+    async (text: string, images?: string[]): Promise<string | null> => {
+      const prompt = text.trim() || (images?.length ? `Please analyze and explain ${images.length > 1 ? 'these photos' : 'this photo'}.` : '');
       if (!prompt || busyRef.current) return null;
 
       const subject = getSubject(subjectId);
@@ -53,7 +53,7 @@ export function useChat(user: UserProfile) {
       storage.recordSearch(prompt, user.id, subject.label);
 
       const now = new Date().toISOString();
-      const userMessage: Message = { id: newId('msg'), role: 'user', content: prompt, imageUrl: image, createdAt: now };
+      const userMessage: Message = { id: newId('msg'), role: 'user', content: prompt, imageUrls: images, createdAt: now };
       const assistantId = newId('msg');
       const placeholder: Message = { id: assistantId, role: 'assistant', content: '', createdAt: now };
 
@@ -81,7 +81,7 @@ export function useChat(user: UserProfile) {
       try {
         const result = await generateAiResponse({
           prompt,
-          image,
+          images,
           history,
           studentClass: user.studentClass,
           subject,

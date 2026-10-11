@@ -25,7 +25,7 @@ export interface AiResult {
 
 export async function generateAiResponse(params: {
   prompt: string;
-  image?: string; // base64 data URL
+  images?: string[]; // base64 data URLs
   history?: Message[];
   studentClass?: string;
   /** Subject chosen in the UI; the backend routes to the matching RAG model/collection by `subject` id. */
@@ -35,7 +35,7 @@ export async function generateAiResponse(params: {
     throw new Error('The AI service is not configured. Set VITE_RAG_API_URL for this deployment.');
   }
 
-  const { prompt, image, history = [], studentClass, subject } = params;
+  const { prompt, images, history = [], studentClass, subject } = params;
   const profileHint =
     ` Subject: ${subject.label}.` + (studentClass ? ` Student: ${studentClass}.` : '');
 
@@ -59,7 +59,8 @@ export async function generateAiResponse(params: {
         subject: subject.id,
         subject_label: subject.label,
         system: SYSTEM_PROMPT + profileHint,
-        image,
+        image: images?.[0], // legacy single-image field
+        images,
         history: history.slice(-6).map(({ role, content }) => ({ role, content })),
       }),
     });

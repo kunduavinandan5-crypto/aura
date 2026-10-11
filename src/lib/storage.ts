@@ -60,7 +60,7 @@ export const storage = {
   saveThreads(threads: Thread[], userId?: string): void {
     const slim = threads.map((t) => ({
       ...t,
-      messages: t.messages.map(({ imageUrl: _image, ...m }) => m),
+      messages: t.messages.map(({ imageUrls: _images, ...m }) => m),
     }));
     write(THREADS_KEY, slim);
     if (!userId) return;

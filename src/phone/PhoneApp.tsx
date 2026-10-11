@@ -20,8 +20,8 @@ export const PhoneApp: React.FC<PhoneAppProps> = ({ user, onSignOut, onUpdateUse
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const handleSendMessage = useCallback(
-    (text: string, image?: string) => {
-      void chat.sendMessage(text, image);
+    (text: string, images?: string[]) => {
+      void chat.sendMessage(text, images);
     },
     [chat.sendMessage]
   );

@@ -12,7 +12,7 @@ export interface Message {
   role: Role;
   content: string;
   createdAt: string;
-  imageUrl?: string;
+  imageUrls?: string[];
   sources?: RagSourceChunk[];
   suggestedFollowups?: string[];
 }

@@ -19,6 +19,7 @@ import { PhoneOrb } from './PhoneOrb';
 import { SubjectSelect } from '../components/SubjectSelect';
 import { CameraCaptureModal } from '../components/camera/CameraCaptureModal';
 import { FeedbackModal } from '../components/feedback/FeedbackModal';
+import { MAX_IMAGES, readImageFiles } from '@/lib/attachments';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { Message, UserProfile } from '@/types';
@@ -33,7 +34,7 @@ interface PhoneAssistantProps {
   user: UserProfile;
   messages: Message[];
   isGenerating: boolean;
-  onSendMessage: (text: string, image?: string) => void;
+  onSendMessage: (text: string, images?: string[]) => void;
   subjectId: string;
   onSubjectChange: (subjectId: string) => void;
   onOpenVoiceMode?: () => void;
@@ -75,7 +76,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   onOpenDrawer,
 }) => {
   const [input, setInput] = useState('');
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -286,39 +287,46 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   }, [voiceTranscript, onSendMessage]);
 
   const handleSend = () => {
-    if ((!input.trim() && !attachedImage) || isGenerating) return;
+    if ((!input.trim() && attachedImages.length === 0) || isGenerating) return;
     if (!subjectId) {
       toast.error('Please select a subject before asking a question.');
       return;
     }
-    onSendMessage(input.trim(), attachedImage || undefined);
+    onSendMessage(input.trim(), attachedImages.length ? attachedImages : undefined);
     setInput('');
-    setAttachedImage(null);
+    setAttachedImages([]);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setAttachedImage(event.target.result as string);
-        toast.success('Photo attached');
-      }
-    };
-    reader.readAsDataURL(file);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
+    if (!files.length) return;
+
+    const added = await readImageFiles(files, attachedImages.length);
+    if (added.length) {
+      setAttachedImages((prev) => [...prev, ...added].slice(0, MAX_IMAGES));
+      toast.success(added.length > 1 ? `${added.length} photos attached` : 'Photo attached');
+    }
   };
 
   const handleCapturePhoto = (imageDataUrl: string) => {
-    setAttachedImage(imageDataUrl);
-    toast.success('Photo captured');
+    setAttachedImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, imageDataUrl]));
+  };
+
+  const openPicker = () => {
+    if (attachedImages.length >= MAX_IMAGES) {
+      toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const openCamera = () => {
+    if (attachedImages.length >= MAX_IMAGES) {
+      toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+      return;
+    }
+    setIsCameraOpen(true);
   };
 
   const copyText = (text: string, id: string) => {
@@ -440,20 +448,27 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const phoneComposer = (
     <div className="w-full">
       {/* Attached Photo Preview */}
-      {attachedImage && !isVoiceActive && (
-        <div className="mb-2 flex items-center gap-2.5 rounded-2xl border border-blue-500/30 bg-blue-950/40 p-1.5 px-3 w-fit anim-fade-up">
-          <img
-            src={attachedImage}
-            alt="Preview"
-            className="h-9 w-9 rounded-lg object-cover border border-white/20"
-          />
-          <span className="text-[11px] font-medium text-blue-200">Photo Attached</span>
-          <button
-            onClick={() => setAttachedImage(null)}
-            className="rounded-full p-1 text-zinc-400 hover:text-white"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+      {attachedImages.length > 0 && !isVoiceActive && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-2xl border border-blue-500/30 bg-blue-950/40 p-1.5 px-3 w-fit max-w-full anim-fade-up">
+          {attachedImages.map((src, i) => (
+            <div key={i} className="relative">
+              <img
+                src={src}
+                alt={`Preview ${i + 1}`}
+                className="h-9 w-9 rounded-lg object-cover border border-white/20"
+              />
+              <button
+                onClick={() => setAttachedImages((prev) => prev.filter((_, idx) => idx !== i))}
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-black/80 p-0.5 text-zinc-300 hover:text-white"
+                aria-label={`Remove photo ${i + 1}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          <span className="text-[11px] font-medium text-blue-200">
+            {attachedImages.length}/{MAX_IMAGES}
+          </span>
         </div>
       )}
 
@@ -500,7 +515,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           {/* Capture Photo Button */}
           <button
             type="button"
-            onClick={() => setIsCameraOpen(true)}
+            onClick={openCamera}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-cyan-400 transition-colors"
             title="Capture photo"
             aria-label="Capture photo with camera"
@@ -511,7 +526,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           {/* Upload Photo Button */}
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={openPicker}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:text-blue-400 transition-colors"
             title="Upload photo"
             aria-label="Upload photo"
@@ -531,11 +546,11 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           {/* Mic / Send button */}
           <button
             type="button"
-            onClick={input.trim() || attachedImage ? handleSend : startVoice}
+            onClick={input.trim() || attachedImages.length ? handleSend : startVoice}
             className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-violet-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
-            title={input.trim() || attachedImage ? 'Send' : 'Voice input'}
+            title={input.trim() || attachedImages.length ? 'Send' : 'Voice input'}
           >
-            {input.trim() || attachedImage ? (
+            {input.trim() || attachedImages.length ? (
               <Send className="h-4 w-4 fill-current ml-0.5" />
             ) : (
               <Mic className="h-4 w-4" />
@@ -560,6 +575,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={handleFileChange}
         className="hidden"
       />
@@ -723,14 +739,18 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                       }`}
                   >
                     {/* Uploaded / Captured Image thumbnail */}
-                    {m.imageUrl && (
-                      <div className="mb-2.5 overflow-hidden rounded-xl border border-white/15 bg-black/40">
-                        <img
-                          src={m.imageUrl}
-                          alt="Uploaded question"
-                          className="max-h-56 w-auto max-w-full rounded-xl object-contain cursor-pointer"
-                          onClick={() => window.open(m.imageUrl, '_blank')}
-                        />
+                    {m.imageUrls && m.imageUrls.length > 0 && (
+                      <div className="mb-2.5 flex flex-wrap gap-2">
+                        {m.imageUrls.map((url, i) => (
+                          <div key={i} className="overflow-hidden rounded-xl border border-white/15 bg-black/40">
+                            <img
+                              src={url}
+                              alt={`Uploaded question ${i + 1}`}
+                              className={`w-auto max-w-full rounded-xl object-contain cursor-pointer ${m.imageUrls!.length > 1 ? 'max-h-28' : 'max-h-56'}`}
+                              onClick={() => window.open(url, '_blank')}
+                            />
+                          </div>
+                        ))}
                       </div>
                     )}
 
@@ -874,6 +894,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onCapture={handleCapturePhoto}
+        existingCount={attachedImages.length}
       />
     </div>
   );

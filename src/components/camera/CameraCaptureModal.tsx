@@ -1,17 +1,23 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { MAX_IMAGES } from '@/lib/attachments';
 import { Camera, RefreshCw, X, Check, AlertCircle } from 'lucide-react';
 
 interface CameraCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCapture: (imageDataUrl: string) => void;
+  /** Photos already attached before opening; the modal closes once MAX_IMAGES is reached in total. */
+  existingCount?: number;
 }
 
 export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   isOpen,
   onClose,
   onCapture,
+  existingCount = 0,
 }) => {
+  const [addedCount, setAddedCount] = useState(0);
+  const totalCount = existingCount + addedCount;
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -24,6 +30,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
       stopCamera();
       setCapturedImage(null);
       setCameraError(null);
+      setAddedCount(0);
       return;
     }
 
@@ -100,9 +107,15 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   };
 
   const handleConfirmPhoto = () => {
-    if (capturedImage) {
-      onCapture(capturedImage);
+    if (!capturedImage) return;
+    onCapture(capturedImage);
+    const next = addedCount + 1;
+    setAddedCount(next);
+    setCapturedImage(null);
+    if (existingCount + next >= MAX_IMAGES) {
       onClose();
+    } else {
+      startCamera(facingMode);
     }
   };
 
@@ -126,7 +139,9 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400">
               <Camera className="h-4 w-4" />
             </div>
-            <span className="text-sm font-bold text-white">Capture Photo</span>
+            <span className="text-sm font-bold text-white">
+              Capture Photos ({totalCount}/{MAX_IMAGES})
+            </span>
           </div>
           <button
             onClick={onClose}
@@ -193,7 +208,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                 className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-500/25 hover:brightness-110 active:scale-95 transition-all"
               >
                 <Check className="h-4 w-4" />
-                <span>Use Photo</span>
+                <span>{totalCount + 1 >= MAX_IMAGES ? 'Use Photo' : 'Add Photo'}</span>
               </button>
             </>
           ) : (
@@ -203,7 +218,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                 onClick={onClose}
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white"
               >
-                Cancel
+                {addedCount > 0 ? 'Done' : 'Cancel'}
               </button>
               {!cameraError && (
                 <button
