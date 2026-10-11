@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { Toaster, toast } from 'sonner';
-import { PhoneLogin } from './phone/PhoneLogin';
+import { PhoneLogin, type LoginResult } from './phone/PhoneLogin';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useDevice } from './hooks/useDevice';
 import { UserProfile } from './types';
@@ -9,7 +9,7 @@ import { newId } from './lib/id';
 import {
   fetchUserProfile,
   isSupabaseConfigured,
-  signInWithEmailLink,
+  signInWithPassword,
   signOutRemote,
   supabase,
   syncUserProfile,
@@ -85,22 +85,16 @@ export const App: React.FC = () => {
     startLocalSession({ id: newId('demo'), name: 'Demo Student', email: '', studentClass: 'Class 12', subject: 'Science', isGuest: true });
   }, [startLocalSession]);
 
-  const handleEmail = useCallback(
-    async (email: string) => {
-      if (!isSupabaseConfigured) {
-        startLocalSession({ id: newId('local'), name: email.split('@')[0] || 'Scholar', email, isGuest: false });
-        return true;
-      }
-      const error = await signInWithEmailLink(email);
-      if (error) {
-        toast.error(error);
-        return false;
-      }
-      toast.success('Check your inbox for a sign-in link.');
-      return true;
-    },
-    [startLocalSession]
-  );
+  /** Success needs no navigation: the Supabase SIGNED_IN event hydrates the user. */
+  const handleLogin = useCallback(async (userId: string, password: string): Promise<LoginResult> => {
+    if (!isSupabaseConfigured) {
+      toast.error('Login is unavailable: the cloud service is not configured. Use the demo instead.');
+      return 'error';
+    }
+    const result = await signInWithPassword(userId, password);
+    if (result.status === 'error') toast.error(result.message);
+    return result.status;
+  }, []);
 
   const handleSignOut = useCallback(async () => {
     await signOutRemote();
@@ -124,8 +118,7 @@ export const App: React.FC = () => {
         {toaster}
         <main className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-[#07080e]">
           <PhoneLogin
-            cloudEnabled={isSupabaseConfigured}
-            onEmail={handleEmail}
+            onLogin={handleLogin}
             onDemo={import.meta.env.VITE_ENABLE_DEMO === 'false' ? undefined : handleDemo}
           />
         </main>

@@ -35,17 +35,18 @@ export function userToProfile(user: User, row?: Partial<UserProfile> | null): Us
   };
 }
 
-export async function signInWithEmailLink(email: string): Promise<string | null> {
-  if (!supabase) return 'Cloud sign-in is not configured.';
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    // Login only: existing users can sign in, new accounts are not created from the login screen.
-    options: { emailRedirectTo: window.location.origin, shouldCreateUser: false },
-  });
-  if (!error) return null;
-  return /signups? not allowed|not found/i.test(error.message)
-    ? 'No account found for this email. Ask your administrator for access.'
-    : error.message;
+export type PasswordSignInResult = { status: 'ok' } | { status: 'invalid' } | { status: 'error'; message: string };
+
+/** The user ID is the account's email address in Supabase Auth. Accounts are created by an administrator. */
+export async function signInWithPassword(userId: string, password: string): Promise<PasswordSignInResult> {
+  if (!supabase) return { status: 'error', message: 'Cloud sign-in is not configured.' };
+  const { error } = await supabase.auth.signInWithPassword({ email: userId, password });
+  if (!error) return { status: 'ok' };
+  // Wrong id and wrong password are deliberately indistinguishable.
+  if (error.status === 400 || /invalid login credentials|invalid (email|credentials)/i.test(error.message)) {
+    return { status: 'invalid' };
+  }
+  return { status: 'error', message: error.message };
 }
 
 export async function signOutRemote(): Promise<void> {

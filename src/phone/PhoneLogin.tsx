@@ -1,35 +1,67 @@
-import React, { useState } from 'react';
-import { GraduationCap, Mail } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, GraduationCap, Lock, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatRemaining, lockRemainingMs, recordFailure, resetAttempts } from '@/lib/loginLimiter';
+
+export type LoginResult = 'ok' | 'invalid' | 'error';
 
 interface PhoneLoginProps {
-  /** True when Supabase is configured: a magic link is emailed. Otherwise a local profile is created. */
-  cloudEnabled: boolean;
-  /** Resolves true when the request succeeded (magic link sent / local session started). */
-  onEmail: (email: string) => Promise<boolean>;
+  /** Verifies the credentials. 'invalid' counts toward the lockout; 'error' (network/config) does not. */
+  onLogin: (userId: string, password: string) => Promise<LoginResult>;
   /** When provided, shows a "Try the demo" button (device-only session, no account). */
   onDemo?: () => void;
 }
 
-export const PhoneLogin: React.FC<PhoneLoginProps> = ({ cloudEnabled, onEmail, onDemo }) => {
-  const [email, setEmail] = useState('');
+export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin, onDemo }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [userId, setUserId] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [linkSent, setLinkSent] = useState(false);
+  const [lockMs, setLockMs] = useState(() => lockRemainingMs());
+  const locked = lockMs > 0;
+
+  useEffect(() => {
+    if (!locked) return;
+    const id = setInterval(() => setLockMs(lockRemainingMs()), 1000);
+    return () => clearInterval(id);
+  }, [locked]);
+
+  const failAttempt = () => {
+    const left = recordFailure();
+    setPassword('');
+    if (left === 0) {
+      setLockMs(lockRemainingMs());
+      toast.error('Too many failed attempts. Login is locked for 30 minutes.');
+    } else {
+      toast.error(`Invalid user ID or password. ${left} attempt${left === 1 ? '' : 's'} left before a 30-minute lock.`);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const value = email.trim();
-    if (!value || busy) return;
+    const id = userId.trim();
+    if (!id || !password || busy) return;
+    if (lockRemainingMs() > 0) {
+      setLockMs(lockRemainingMs());
+      return;
+    }
     setBusy(true);
     try {
-      const ok = await onEmail(value);
-      if (ok && cloudEnabled) setLinkSent(true);
+      const result = await onLogin(id, password);
+      if (result === 'ok') resetAttempts();
+      else if (result === 'invalid') failAttempt();
     } catch {
-      toast.error('Sign-in failed. Please try again.');
+      toast.error('Login failed. Please try again.');
     } finally {
       setBusy(false);
     }
   };
+
+  const lockNotice = locked && (
+    <p role="alert" className="text-center text-xs text-amber-300">
+      Too many failed attempts. Try again in {formatRemaining(lockMs)}.
+    </p>
+  );
 
   return (
     <div className="relative flex h-full w-full flex-col justify-between overflow-y-auto bg-[#07080e] px-6 py-8 text-white">
@@ -59,46 +91,73 @@ export const PhoneLogin: React.FC<PhoneLoginProps> = ({ cloudEnabled, onEmail, o
       </div>
 
       <div className="flex flex-col gap-3">
-        {linkSent ? (
-          <div role="status" className="space-y-3 text-center animate-fade-in">
-            <p className="text-sm font-semibold text-white">Check your inbox</p>
-            <p className="text-xs leading-relaxed text-[#8f96a8]">
-              We sent a sign-in link to <span className="text-white">{email.trim()}</span>. Open it on this device to
-              continue.
-            </p>
+        {showForm ? (
+          <form onSubmit={handleSubmit} className="space-y-3 animate-fade-in">
             <button
               type="button"
-              onClick={() => setLinkSent(false)}
-              className="text-[11px] text-zinc-500 hover:text-zinc-300"
+              onClick={() => setShowForm(false)}
+              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300"
             >
-              Use a different email
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
             </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-3 animate-fade-in">
-            <label htmlFor="login-email" className="sr-only">
-              Email address
+
+            <label htmlFor="login-id" className="sr-only">
+              User ID
             </label>
             <div className="relative">
-              <Mail className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <User className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
               <input
-                id="login-email"
-                type="email"
+                id="login-id"
+                type="text"
                 required
-                autoComplete="email"
-                inputMode="email"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-4 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="User ID"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                disabled={locked}
+                className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-4 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none disabled:opacity-60"
               />
             </div>
+
+            <label htmlFor="login-password" className="sr-only">
+              Password
+            </label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input
+                id="login-password"
+                type="password"
+                required
+                autoComplete="current-password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={locked}
+                className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-4 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none disabled:opacity-60"
+              />
+            </div>
+
+            {lockNotice}
+
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || locked}
               className="w-full rounded-full bg-gradient-to-r from-[#5942e8] via-[#634df4] to-[#8042f4] py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-60"
             >
-              {busy ? 'Please wait…' : cloudEnabled ? 'Email me a sign-in link' : 'Log in'}
+              {busy ? 'Please wait…' : 'Log in'}
+            </button>
+          </form>
+        ) : (
+          <div className="space-y-3 animate-fade-in">
+            {lockNotice}
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="w-full rounded-full bg-gradient-to-r from-[#5942e8] via-[#634df4] to-[#8042f4] py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:opacity-95 active:scale-[0.98]"
+            >
+              Log in
             </button>
             {onDemo && (
               <button
@@ -109,7 +168,7 @@ export const PhoneLogin: React.FC<PhoneLoginProps> = ({ cloudEnabled, onEmail, o
                 Try the demo
               </button>
             )}
-          </form>
+          </div>
         )}
       </div>
     </div>
