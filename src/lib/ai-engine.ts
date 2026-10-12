@@ -5,8 +5,14 @@ import { Subject } from './subjects';
  * Chat goes through the deployed RAG backend (NEXT_PUBLIC_API_URL, no trailing slash).
  * The URL is public by design; no API keys live in this client.
  */
-const API_BASE: string = ((import.meta.env.NEXT_PUBLIC_API_URL as string | undefined) ?? '')
-  .trim()
+const rawApiUrl = (
+  (import.meta.env.NEXT_PUBLIC_API_URL as string | undefined) ||
+  (import.meta.env.VITE_RAG_API_URL as string | undefined) ||
+  (import.meta.env.VITE_API_URL as string | undefined) ||
+  'https://rag11acc.onrender.com'
+).trim();
+
+const API_BASE: string = (rawApiUrl || 'https://rag11acc.onrender.com')
   .replace(/^["']|["']$/g, '')
   .replace(/\/+$/, '');
 
@@ -41,9 +47,7 @@ export async function generateAiResponse(params: {
   /** Subject selected by the student in the UI (e.g. { id: "accountancy" }). */
   subject: Subject;
 }): Promise<AiResult> {
-  if (!API_BASE) {
-    throw new Error('The AI service is not configured. Set NEXT_PUBLIC_API_URL for this deployment.');
-  }
+  const endpoint = API_BASE || 'https://rag11acc.onrender.com';
 
   const { prompt, studentClass, subject } = params;
   const body: Record<string, string> = { question: prompt, subject: subject.id.toLowerCase() };
@@ -57,7 +61,7 @@ export async function generateAiResponse(params: {
 
   let data: any;
   try {
-    const response = await fetch(`${API_BASE}/ask`, {
+    const response = await fetch(`${endpoint}/ask`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
