@@ -91,16 +91,55 @@ export async function generateAiResponse(params: {
     throw new Error(AI_ERROR_MESSAGE);
   }
 
-  const content = typeof data?.answer === 'string' ? data.answer.trim() : '';
-  if (!content) throw new Error(AI_ERROR_MESSAGE);
+  const rawAnswer = typeof data?.answer === 'string' ? data.answer.trim() : '';
+  if (!rawAnswer) throw new Error(AI_ERROR_MESSAGE);
+
+  const content = cleanAnswerContent(rawAnswer);
 
   return {
     content,
-    sources: extractSources(data.sources),
+    sources: undefined, // Hidden per user preference (show only answers)
     followups: followupsFor(prompt),
     answerId: typeof data.answer_id === 'string' ? data.answer_id : undefined,
     mode: data.mode,
   };
+}
+
+/**
+ * Strips book names, document filenames (.docx, .pdf, .doc), and page numbers
+ * so the student sees only the clean answer.
+ */
+function cleanAnswerContent(rawText: string): string {
+  if (!rawText) return '';
+
+  let text = rawText;
+
+  // Clean fallback header if present
+  text = text.replace(
+    /The AI answer writer is temporarily unavailable\.\s*Here are the most relevant passages from your study material:?/gi,
+    ''
+  );
+
+  // Remove list items like "1. FILENAME.docx - Page 123\n456"
+  text = text.replace(/^\s*\d+\.\s+[\w\s\-_,.]+\.(docx?|pdf|txt|doc)\s*-\s*Page\s*\d+[\s\d]*/gim, '');
+
+  // Remove inline "FILENAME.docx - Page 123"
+  text = text.replace(/[\w\s\-_,.]+\.(docx?|pdf|txt|doc)\s*-\s*Page\s*\d+/gi, '');
+
+  // Remove standalone "- Page 123" or "(Page 123)"
+  text = text.replace(/\s*-\s*Page\s*\d+/gi, '');
+  text = text.replace(/\(Page\s*\d+\)/gi, '');
+
+  // Remove stray document file references
+  text = text.replace(/\[?[a-zA-Z0-9_\-\s]+\.(docx?|pdf|txt|doc)\]?/gi, '');
+
+  // Clean orphaned numbering lines
+  text = text.replace(/^\s*\d+\.\s*$/gm, '');
+
+  // Collapse multiple newlines
+  text = text.replace(/\n{3,}/g, '\n\n').trim();
+
+  return text || rawText.trim();
 }
 
 const feedbackSent = new Set<string>();
