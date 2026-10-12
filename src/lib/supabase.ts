@@ -42,12 +42,20 @@ export interface StudentRecord {
 export async function fetchStudentByEmailOrPhone(identifier: string): Promise<StudentRecord | null> {
   if (!supabase || !identifier?.trim()) return null;
   const clean = identifier.trim().toLowerCase();
+  const cleanPhone = clean.replace(/\s+/g, '');
 
   // 1. Try RPC function first (handles SECURITY DEFINER permissions cleanly)
   try {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('get_student_by_email', {
+    let { data: rpcData, error: rpcErr } = await supabase.rpc('get_student_by_email', {
       p_identifier: clean,
     });
+    if ((rpcErr || !rpcData) && cleanPhone !== clean) {
+      const retry = await supabase.rpc('get_student_by_email', { p_identifier: cleanPhone });
+      if (!retry.error && retry.data) {
+        rpcData = retry.data;
+        rpcErr = null;
+      }
+    }
     if (!rpcErr && rpcData) {
       return {
         id: rpcData.id,
@@ -62,10 +70,13 @@ export async function fetchStudentByEmailOrPhone(identifier: string): Promise<St
 
   // 2. Direct query on class_11_students
   try {
+    const filter = cleanPhone !== clean 
+      ? `email.ilike.${clean},phone.eq.${clean},phone.eq.${cleanPhone}`
+      : `email.ilike.${clean},phone.eq.${clean}`;
     const { data: c11 } = await supabase
       .from('class_11_students')
       .select('id, name, email, phone, subject')
-      .or(`email.ilike.${clean},phone.eq.${clean}`)
+      .or(filter)
       .maybeSingle();
 
     if (c11) {
@@ -82,10 +93,13 @@ export async function fetchStudentByEmailOrPhone(identifier: string): Promise<St
 
   // 3. Direct query on class_12_students
   try {
+    const filter = cleanPhone !== clean 
+      ? `email.ilike.${clean},phone.eq.${clean},phone.eq.${cleanPhone}`
+      : `email.ilike.${clean},phone.eq.${clean}`;
     const { data: c12 } = await supabase
       .from('class_12_students')
       .select('id, name, email, phone, subject')
-      .or(`email.ilike.${clean},phone.eq.${clean}`)
+      .or(filter)
       .maybeSingle();
 
     if (c12) {
@@ -113,14 +127,25 @@ export async function authenticateStudentFromClassTables(
 ): Promise<{ student: StudentRecord | null; error?: string }> {
   if (!supabase || !loginId?.trim() || !password) return { student: null };
   const cleanLogin = loginId.trim().toLowerCase();
+  const cleanPhone = cleanLogin.replace(/\s+/g, '');
   const cleanPass = password.trim();
 
   // 1. Try secure RPC function if created in Supabase
   try {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('login_student', {
+    let { data: rpcData, error: rpcErr } = await supabase.rpc('login_student', {
       p_login: cleanLogin,
       p_password: cleanPass,
     });
+    if ((rpcErr || !rpcData) && cleanPhone !== cleanLogin) {
+      const retry = await supabase.rpc('login_student', {
+        p_login: cleanPhone,
+        p_password: cleanPass,
+      });
+      if (!retry.error && retry.data) {
+        rpcData = retry.data;
+        rpcErr = null;
+      }
+    }
     if (!rpcErr && rpcData) {
       return {
         student: {
@@ -135,12 +160,16 @@ export async function authenticateStudentFromClassTables(
     }
   } catch (_) {}
 
+  const filter = cleanPhone !== cleanLogin
+    ? `email.ilike.${cleanLogin},phone.eq.${cleanLogin},phone.eq.${cleanPhone}`
+    : `email.ilike.${cleanLogin},phone.eq.${cleanLogin}`;
+
   // 2. Direct query on class_11_students
   try {
     const { data: c11, error: e11 } = await supabase
       .from('class_11_students')
       .select('id, name, email, phone, subject, password')
-      .or(`email.ilike.${cleanLogin},phone.eq.${cleanLogin}`)
+      .or(filter)
       .eq('password', cleanPass)
       .maybeSingle();
 
@@ -165,7 +194,7 @@ export async function authenticateStudentFromClassTables(
     const { data: c12, error: e12 } = await supabase
       .from('class_12_students')
       .select('id, name, email, phone, subject, password')
-      .or(`email.ilike.${cleanLogin},phone.eq.${cleanLogin}`)
+      .or(filter)
       .eq('password', cleanPass)
       .maybeSingle();
 
