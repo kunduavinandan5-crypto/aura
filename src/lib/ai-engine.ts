@@ -5,14 +5,13 @@ import { Subject } from './subjects';
  * Chat goes through the deployed RAG backend (NEXT_PUBLIC_API_URL, no trailing slash).
  * The URL is public by design; no API keys live in this client.
  */
-const rawApiUrl = (
+const customApi = (
   (import.meta.env.NEXT_PUBLIC_API_URL as string | undefined) ||
   (import.meta.env.VITE_RAG_API_URL as string | undefined) ||
   (import.meta.env.VITE_API_URL as string | undefined) ||
-  'https://rag11acc.onrender.com'
-).trim();
-
-const API_BASE: string = (rawApiUrl || 'https://rag11acc.onrender.com')
+  ''
+)
+  .trim()
   .replace(/^["']|["']$/g, '')
   .replace(/\/+$/, '');
 
@@ -47,8 +46,6 @@ export async function generateAiResponse(params: {
   /** Subject selected by the student in the UI (e.g. { id: "accountancy" }). */
   subject: Subject;
 }): Promise<AiResult> {
-  const endpoint = API_BASE || 'https://rag11acc.onrender.com';
-
   const { prompt, studentClass, subject } = params;
   const body: Record<string, string> = { question: prompt, subject: subject.id.toLowerCase() };
 
@@ -56,25 +53,42 @@ export async function generateAiResponse(params: {
   const cls = classNumber(studentClass);
   if (cls) body.student_class = cls;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // Try same-origin /api/rag proxy first (bypasses browser CORS restrictions completely),
+  // then fallback to direct Render URLs.
+  const candidateEndpoints = [
+    '/api/rag',
+    customApi,
+    'https://rag11acc.onrender.com',
+  ].filter((url, idx, self) => url && self.indexOf(url) === idx) as string[];
 
-  let data: any;
-  try {
-    const response = await fetch(`${endpoint}/ask`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    data = await response.json();
-  } catch (err) {
-    // The student only sees the generic message; keep the real cause (CORS, timeout, HTTP status) in the console.
-    console.error('AI request failed:', err);
+  let data: any = null;
+  let lastError: any = null;
+
+  for (const endpoint of candidateEndpoints) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${endpoint}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify(body),
+      });
+      if (response.ok) {
+        data = await response.json();
+        clearTimeout(timer);
+        break;
+      }
+    } catch (err) {
+      lastError = err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  if (!data) {
+    console.error('All AI endpoints failed. Last error:', lastError);
     throw new Error(AI_ERROR_MESSAGE);
-  } finally {
-    clearTimeout(timer);
   }
 
   const content = typeof data?.answer === 'string' ? data.answer.trim() : '';
@@ -93,10 +107,11 @@ const feedbackSent = new Set<string>();
 
 /** Fire-and-forget, at most once per answer; errors are ignored on purpose. */
 export async function sendAnswerFeedback(answerId: string, rating: 'up' | 'down'): Promise<void> {
-  if (!API_BASE || !answerId || feedbackSent.has(answerId)) return;
+  const feedbackBase = customApi || '/api/rag';
+  if (!feedbackBase || !answerId || feedbackSent.has(answerId)) return;
   feedbackSent.add(answerId);
   try {
-    await fetch(`${API_BASE}/feedback`, {
+    await fetch(`${feedbackBase}/feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ answer_id: answerId, rating }),

@@ -128,7 +128,17 @@ export default defineConfig(({ mode }) => {
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     plugins: [react(), tailwindcss(), seoPlugin(siteUrl), swVersionPlugin()],
     resolve: { alias: { '@': path.resolve(__dirname, './src') } },
-    server: { port: 5173, host: true },
+    server: {
+      port: 5173,
+      host: true,
+      proxy: {
+        '/api/rag': {
+          target: 'https://rag11acc.onrender.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/rag/, ''),
+        },
+      },
+    },
     build: {
       sourcemap: false,
       target: 'es2022',
