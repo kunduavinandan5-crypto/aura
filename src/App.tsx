@@ -139,7 +139,7 @@ export const App: React.FC = () => {
     storage.saveUser(updated);
   }, []);
 
-  const toaster = <Toaster position="top-center" richColors theme="dark" />;
+  const toaster = <Toaster position="top-center" richColors theme="dark" visibleToasts={1} duration={3500} />;
 
   if (!authReady) return <Splash />;
 

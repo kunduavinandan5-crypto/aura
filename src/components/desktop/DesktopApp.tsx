@@ -362,7 +362,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     const added = await readImageFiles(files, attachedImages.length);
     if (added.length) {
       setAttachedImages((prev) => [...prev, ...added].slice(0, MAX_IMAGES));
-      toast.success(added.length > 1 ? `${added.length} photos attached` : 'Photo attached');
+      toast.success(added.length > 1 ? `${added.length} photos attached` : 'Photo attached', {
+        duration: 2500,
+      });
     }
   };
 

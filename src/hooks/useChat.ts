@@ -88,6 +88,9 @@ export function useChat(user: UserProfile) {
       const prompt = text.trim() || (images?.length ? `Please analyze and explain ${images.length > 1 ? 'these photos' : 'this photo'}.` : '');
       if (!prompt || busyRef.current) return null;
 
+      // Clear any prior toasts (e.g. "Photo attached") so toasts never stack or overlap
+      toast.dismiss();
+
       const subject = getSubject(subjectId);
       if (!subject) {
         toast.error('Please select a subject before asking a question.');
