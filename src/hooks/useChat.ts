@@ -43,7 +43,17 @@ export function useChat(user: UserProfile) {
 
   const threadsRef = useRef(threads);
   const busyRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   threadsRef.current = threads;
+
+  const cancelGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    busyRef.current = false;
+    setIsGenerating(false);
+  }, []);
 
   useEffect(() => {
     storage.saveThreads(threads, user.id);
@@ -110,12 +120,15 @@ export function useChat(user: UserProfile) {
       }
 
       const targetId = threadId;
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
       setIsGenerating(true);
       try {
         const result = await generateAiResponse({
           prompt,
           studentClass: user.studentClass,
           subject,
+          signal: abortController.signal,
         });
         const assistantMessage: Message = {
           id: assistantId,
@@ -132,7 +145,11 @@ export function useChat(user: UserProfile) {
           messages: [...t.messages.filter((m) => m.id !== assistantId), assistantMessage],
         }));
         return result.content;
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || abortController.signal.aborted) {
+          // Cancelled by user - clean stop, no error toast
+          return null;
+        }
         toast.error(err instanceof Error ? err.message : AI_ERROR_MESSAGE);
         const fallbackMessage: Message = {
           id: assistantId,
@@ -147,6 +164,7 @@ export function useChat(user: UserProfile) {
         return null;
       } finally {
         busyRef.current = false;
+        abortControllerRef.current = null;
         setIsGenerating(false);
       }
     },
@@ -181,6 +199,7 @@ export function useChat(user: UserProfile) {
     messages,
     activeThread,
     isGenerating,
+    cancelGeneration,
     subjectId,
     setSubjectId,
     sendMessage,

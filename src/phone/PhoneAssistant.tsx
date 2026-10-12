@@ -37,6 +37,7 @@ interface PhoneAssistantProps {
   messages: Message[];
   isGenerating: boolean;
   onSendMessage: (text: string, images?: string[]) => void;
+  onCancel?: () => void;
   subjectId: string;
   onSubjectChange: (subjectId: string) => void;
   onOpenVoiceMode?: () => void;
@@ -73,6 +74,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   messages,
   isGenerating,
   onSendMessage,
+  onCancel,
   subjectId,
   onSubjectChange,
   onOpenDrawer,
@@ -548,19 +550,31 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
             className="w-full bg-transparent text-xs text-white placeholder-zinc-400 focus:outline-none"
           />
 
-          {/* Mic / Send button */}
-          <button
-            type="button"
-            onClick={input.trim() || attachedImages.length ? handleSend : startVoice}
-            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-violet-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
-            title={input.trim() || attachedImages.length ? 'Send' : 'Voice input'}
-          >
-            {input.trim() || attachedImages.length ? (
-              <Send className="h-4 w-4 fill-current ml-0.5" />
-            ) : (
-              <Mic className="h-4 w-4" />
-            )}
-          </button>
+          {/* Mic / Send / Stop button */}
+          {isGenerating ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-white border border-white/20 shadow-lg shadow-black/40 transition-transform active:scale-95 hover:bg-zinc-700"
+              title="Stop generating"
+              aria-label="Stop generating"
+            >
+              <Square className="h-3.5 w-3.5 fill-current text-red-400" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={input.trim() || attachedImages.length ? handleSend : startVoice}
+              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-violet-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
+              title={input.trim() || attachedImages.length ? 'Send' : 'Voice input'}
+            >
+              {input.trim() || attachedImages.length ? (
+                <Send className="h-4 w-4 fill-current ml-0.5" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -873,6 +887,18 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                   <span className="gemini-typing-dot" />
                   <span className="gemini-typing-dot" />
                 </span>
+                {onCancel && (
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    className="ml-1.5 flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-300 transition-all hover:bg-red-500/20 active:scale-95"
+                    title="Stop generating"
+                    aria-label="Stop generating"
+                  >
+                    <Square className="h-2 w-2 fill-current text-red-400" />
+                    <span>Stop</span>
+                  </button>
+                )}
               </div>
             )}
 

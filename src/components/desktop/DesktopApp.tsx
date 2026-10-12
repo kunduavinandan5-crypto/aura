@@ -77,6 +77,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     activeThread,
     messages,
     isGenerating,
+    cancelGeneration,
     subjectId,
     setSubjectId,
     sendMessage,
@@ -607,20 +608,32 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
             className="w-full bg-transparent text-sm text-white placeholder-zinc-400 focus:outline-none"
           />
 
-          <button
-            type="button"
-            onClick={
-              input.trim() || attachedImages.length ? () => handleSendMessage(input) : startVoice
-            }
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-indigo-600 to-violet-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
-            title={input.trim() || attachedImages.length ? 'Send' : 'Voice mode'}
-          >
-            {input.trim() || attachedImages.length ? (
-              <Send className="h-4 w-4 fill-current ml-0.5" />
-            ) : (
-              <Mic className="h-4 w-4" />
-            )}
-          </button>
+          {isGenerating ? (
+            <button
+              type="button"
+              onClick={cancelGeneration}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-white border border-white/20 shadow-lg shadow-black/40 transition-transform active:scale-95 hover:bg-zinc-700"
+              title="Stop generating"
+              aria-label="Stop generating"
+            >
+              <Square className="h-4 w-4 fill-current text-red-400" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={
+                input.trim() || attachedImages.length ? () => handleSendMessage(input) : startVoice
+              }
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 via-indigo-600 to-violet-600 text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 hover:brightness-110"
+              title={input.trim() || attachedImages.length ? 'Send' : 'Voice mode'}
+            >
+              {input.trim() || attachedImages.length ? (
+                <Send className="h-4 w-4 fill-current ml-0.5" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -1066,6 +1079,16 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                     <span className="gemini-typing-dot" />
                     <span className="gemini-typing-dot" />
                   </span>
+                  <button
+                    type="button"
+                    onClick={cancelGeneration}
+                    className="ml-2 flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300 transition-all hover:bg-red-500/20 active:scale-95"
+                    title="Stop generating"
+                    aria-label="Stop generating"
+                  >
+                    <Square className="h-2.5 w-2.5 fill-current text-red-400" />
+                    <span>Stop</span>
+                  </button>
                 </div>
               )}
               {isGenerating && slowHint && <p className="text-[11px] text-zinc-500">{SLOW_HINT}</p>}

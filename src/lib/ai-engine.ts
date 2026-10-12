@@ -45,8 +45,14 @@ export async function generateAiResponse(params: {
   studentClass?: string;
   /** Subject selected by the student in the UI (e.g. { id: "accountancy" }). */
   subject: Subject;
+  /** Optional cancellation signal from user stopping generation. */
+  signal?: AbortSignal;
 }): Promise<AiResult> {
-  const { prompt, studentClass, subject } = params;
+  const { prompt, studentClass, subject, signal } = params;
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
   const body: Record<string, string> = { question: prompt, subject: subject.id.toLowerCase() };
 
   // student_class comes from the admin-set Supabase profile, not from the subject config.
@@ -65,8 +71,16 @@ export async function generateAiResponse(params: {
   let lastError: any = null;
 
   for (const endpoint of candidateEndpoints) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const onSignalAbort = () => controller.abort();
+    if (signal) {
+      signal.addEventListener('abort', onSignalAbort, { once: true });
+    }
+
     try {
       const response = await fetch(`${endpoint}/ask`, {
         method: 'POST',
@@ -79,10 +93,16 @@ export async function generateAiResponse(params: {
         clearTimeout(timer);
         break;
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
       lastError = err;
     } finally {
       clearTimeout(timer);
+      if (signal) {
+        signal.removeEventListener('abort', onSignalAbort);
+      }
     }
   }
 
