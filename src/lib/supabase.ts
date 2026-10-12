@@ -7,15 +7,19 @@ import { newId } from './id';
  * Data is protected by Row Level Security (see supabase_schema.sql), never by hiding
  * these values. Never put a service_role key in any VITE_* variable.
  */
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
-const supabaseKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim();
+const rawUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || '';
+const rawKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || '';
+
+// Strip accidental quotes or trailing slashes from Vercel environment variables
+const supabaseUrl = rawUrl.replace(/^["']|["']$/g, '').replace(/\/+$/, '');
+const supabaseKey = rawKey.replace(/^["']|["']$/g, '');
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && supabaseKey && /^https:\/\/.+\.supabase\.(co|in)$/.test(supabaseUrl)
 );
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl!, supabaseKey!, {
+  ? createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     })
   : null;

@@ -5,7 +5,10 @@ import { Subject } from './subjects';
  * Chat goes through the deployed RAG backend (NEXT_PUBLIC_API_URL, no trailing slash).
  * The URL is public by design; no API keys live in this client.
  */
-const API_BASE: string = ((import.meta.env.NEXT_PUBLIC_API_URL as string | undefined) ?? '').trim().replace(/\/+$/, '');
+const API_BASE: string = ((import.meta.env.NEXT_PUBLIC_API_URL as string | undefined) ?? '')
+  .trim()
+  .replace(/^["']|["']$/g, '')
+  .replace(/\/+$/, '');
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
