@@ -16,7 +16,17 @@ function isUserTyping(): boolean {
  * If the user is mid-typing, a toast offers the reload instead so nothing is lost.
  */
 export function registerPWA(): void {
-  if (!import.meta.env.PROD || typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+  if (!import.meta.env.PROD) {
+    // In dev mode, unregister any lingering service worker from previous production builds
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister();
+      }
+    });
+    return;
+  }
 
   // A controller already present means this is an update, not the first install.
   const hadController = Boolean(navigator.serviceWorker.controller);

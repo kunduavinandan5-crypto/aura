@@ -19,6 +19,8 @@ import { PhoneOrb } from './PhoneOrb';
 import { SubjectSelect } from '../components/SubjectSelect';
 import { CameraCaptureModal } from '../components/camera/CameraCaptureModal';
 import { FeedbackModal } from '../components/feedback/FeedbackModal';
+import { AnswerExtras, SLOW_HINT, useSlowHint } from '@/components/chat/AnswerExtras';
+import { sendAnswerFeedback } from '@/lib/ai-engine';
 import { MAX_IMAGES, openImageInNewTab, readImageFiles } from '@/lib/attachments';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
@@ -81,6 +83,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const slowHint = useSlowHint(isGenerating);
   const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'positive' | 'negative'>>(() => getSavedFeedbackRatings());
   const [feedbackModalTarget, setFeedbackModalTarget] = useState<{ messageId: string; snippet: string } | null>(null);
 
@@ -398,6 +401,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       saveFeedbackRating(message.id, 'positive');
       return next;
     });
+    if (message.answerId) void sendAnswerFeedback(message.answerId, 'up');
     toast.success('Thank you for your feedback!');
     await submitMessageFeedback({
       messageId: message.id,
@@ -414,6 +418,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       toast.info('Feedback already recorded for this response');
       return;
     }
+    if (message.answerId) void sendAnswerFeedback(message.answerId, 'down');
     setFeedbackModalTarget({
       messageId: message.id,
       snippet: message.content.slice(0, 200),
@@ -726,6 +731,8 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           <div className="space-y-4 py-4 max-w-lg mx-auto w-full">
             {messages.map((m) => {
               const isUser = m.role === 'user';
+              // Do not render empty assistant message while generating or if blank
+              if (!isUser && !m.content?.trim()) return null;
               return (
                 <div
                   key={m.id}
@@ -757,6 +764,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                     <div className="prose-chat break-words text-xs sm:text-sm">
                       <ReactMarkdown>{m.content}</ReactMarkdown>
                     </div>
+                    {!isUser && <AnswerExtras message={m} />}
 
                     {m.suggestedFollowups && m.suggestedFollowups.length > 0 && (
                       <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-wrap gap-1.5">
@@ -772,7 +780,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                       </div>
                     )}
 
-                    {!isUser && (
+                    {!isUser && m.content?.trim() && (
                       <div className="mt-2.5 flex items-center justify-between text-[11px] text-zinc-500 border-t border-white/5 pt-2">
                         <div className="flex items-center gap-3">
                           <button
@@ -828,7 +836,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                           >
                             <ThumbsUp className="h-3 w-3" />
                             {feedbackRatings[m.id] === 'positive' && (
-                              <span className="text-[9px] font-medium">Helpful</span>
+                              <span className="text-[9px] font-medium">Thanks!</span>
                             )}
                           </button>
                           <button
@@ -846,7 +854,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                           >
                             <ThumbsDown className="h-3 w-3" />
                             {feedbackRatings[m.id] === 'negative' && (
-                              <span className="text-[9px] font-medium">Reported</span>
+                              <span className="text-[9px] font-medium">Thanks!</span>
                             )}
                           </button>
                         </div>
@@ -859,7 +867,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
 
             {isGenerating && (
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 w-fit backdrop-blur-md anim-fade-up">
-                <span className="text-[10px] text-zinc-400">Thinking</span>
+                <span className="text-[10px] text-zinc-400">Thinking...</span>
                 <span className="flex items-center gap-1 text-blue-400">
                   <span className="gemini-typing-dot" />
                   <span className="gemini-typing-dot" />
@@ -868,7 +876,8 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
               </div>
             )}
 
-            <div ref={messagesEndRef} />
+            {isGenerating && slowHint && <p className="text-[11px] text-zinc-500">{SLOW_HINT}</p>}
+              <div ref={messagesEndRef} />
           </div>
         )}
       </div>

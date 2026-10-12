@@ -22,7 +22,9 @@ import {
 import { PhoneOrb } from '@/phone/PhoneOrb';
 import { SettingsModal } from '../settings/SettingsModal';
 import { CameraCaptureModal } from '../camera/CameraCaptureModal';
-import { MAX_IMAGES, openImageInNewTab, readImageFiles } from '@/lib/attachments';
+import { AnswerExtras, SLOW_HINT, useSlowHint } from '@/components/chat/AnswerExtras';
+import { sendAnswerFeedback } from '@/lib/ai-engine';
+import { MAX_IMAGES, compressImage, openImageInNewTab, readImageFiles } from '@/lib/attachments';
 import { FeedbackModal } from '../feedback/FeedbackModal';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
@@ -102,6 +104,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
   /* ── Modals & Feedback ── */
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const slowHint = useSlowHint(isGenerating);
   const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'positive' | 'negative'>>(() => getSavedFeedbackRatings());
   const [feedbackModalTarget, setFeedbackModalTarget] = useState<{ messageId: string; snippet: string } | null>(null);
 
@@ -141,21 +144,16 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
         if (items[i].type.indexOf('image') !== -1) {
           const blob = items[i].getAsFile();
           if (blob) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              if (event.target?.result) {
-                const dataUrl = event.target.result as string;
-                setAttachedImages((prev) => {
-                  if (prev.length >= MAX_IMAGES) {
-                    toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
-                    return prev;
-                  }
-                  toast.success('Photo pasted from clipboard');
-                  return [...prev, dataUrl];
-                });
-              }
-            };
-            reader.readAsDataURL(blob);
+            void compressImage(blob).then((dataUrl) => {
+              setAttachedImages((prev) => {
+                if (prev.length >= MAX_IMAGES) {
+                  toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+                  return prev;
+                }
+                toast.success('Photo pasted from clipboard');
+                return [...prev, dataUrl];
+              });
+            });
           }
         }
       }
@@ -456,6 +454,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
       saveFeedbackRating(message.id, 'positive');
       return next;
     });
+    if (message.answerId) void sendAnswerFeedback(message.answerId, 'up');
     toast.success('Thank you for your feedback!');
     await submitMessageFeedback({
       messageId: message.id,
@@ -473,6 +472,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
       toast.info('Feedback already recorded for this response');
       return;
     }
+    if (message.answerId) void sendAnswerFeedback(message.answerId, 'down');
     setFeedbackModalTarget({
       messageId: message.id,
       snippet: message.content.slice(0, 200),
@@ -919,6 +919,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
             <div className="mx-auto max-w-3xl space-y-6">
               {messages.map((m) => {
                 const isUser = m.role === 'user';
+                // Do not render empty assistant message while generating or if blank
+                if (!isUser && !m.content?.trim()) return null;
                 return (
                   <div
                     key={m.id}
@@ -950,6 +952,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                       <div className="prose-chat break-words text-sm">
                         <ReactMarkdown>{m.content}</ReactMarkdown>
                       </div>
+                      {!isUser && <AnswerExtras message={m} />}
 
                       {m.suggestedFollowups && m.suggestedFollowups.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-white/[0.08] space-y-1.5">
@@ -970,7 +973,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                         </div>
                       )}
 
-                      {!isUser && (
+                      {!isUser && m.content?.trim() && (
                         <div className="mt-3 flex items-center justify-between text-xs text-zinc-500 border-t border-white/5 pt-2.5">
                           <div className="flex items-center gap-3">
                             <button
@@ -1026,7 +1029,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                             >
                               <ThumbsUp className="h-3.5 w-3.5" />
                               {feedbackRatings[m.id] === 'positive' && (
-                                <span className="text-[10px] font-medium">Helpful</span>
+                                <span className="text-[10px] font-medium">Thanks!</span>
                               )}
                             </button>
                             <button
@@ -1044,7 +1047,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                             >
                               <ThumbsDown className="h-3.5 w-3.5" />
                               {feedbackRatings[m.id] === 'negative' && (
-                                <span className="text-[10px] font-medium">Reported</span>
+                                <span className="text-[10px] font-medium">Thanks!</span>
                               )}
                             </button>
                           </div>
@@ -1057,7 +1060,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
               {isGenerating && (
                 <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 w-fit backdrop-blur-md anim-fade-up">
-                  <span className="text-[11px] text-zinc-400">Aura is thinking</span>
+                  <span className="text-[11px] text-zinc-400">Thinking...</span>
                   <span className="flex items-center gap-1 text-blue-400">
                     <span className="gemini-typing-dot" />
                     <span className="gemini-typing-dot" />
@@ -1065,6 +1068,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                   </span>
                 </div>
               )}
+              {isGenerating && slowHint && <p className="text-[11px] text-zinc-500">{SLOW_HINT}</p>}
               <div ref={messagesEndRef} />
             </div>
           )}

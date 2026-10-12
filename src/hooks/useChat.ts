@@ -2,20 +2,27 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Message, Thread, UserProfile } from '@/types';
 import { storage } from '@/lib/storage';
-import { generateAiResponse } from '@/lib/ai-engine';
+import { AI_ERROR_MESSAGE, generateAiResponse } from '@/lib/ai-engine';
 import { newId } from '@/lib/id';
 import { getSubject, loadSubjectId, saveSubjectId } from '@/lib/subjects';
 import { loadAllMessageImages, saveMessageImages } from '@/lib/imageStore';
 
-const FALLBACK_REPLY =
-  "Sorry, I couldn't get an answer just now. Please check your connection and try again.";
+const FALLBACK_REPLY = AI_ERROR_MESSAGE;
 
 /** Shared chat state for the desktop and phone layouts. */
 export function useChat(user: UserProfile) {
   const [threads, setThreads] = useState<Thread[]>(() => storage.getThreads());
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [subjectId, setSubjectIdState] = useState(loadSubjectId);
+  const [subjectId, setSubjectIdState] = useState(() => {
+    const saved = loadSubjectId();
+    if (saved) return saved;
+    if (user.subject) {
+      const match = getSubject(user.subject);
+      if (match) return match.id;
+    }
+    return '';
+  });
 
   const setSubjectId = useCallback((id: string) => {
     const next = getSubject(id)?.id;
@@ -23,6 +30,16 @@ export function useChat(user: UserProfile) {
     setSubjectIdState(next);
     saveSubjectId(next);
   }, []);
+
+  useEffect(() => {
+    if (!subjectId && user.subject) {
+      const match = getSubject(user.subject);
+      if (match) {
+        setSubjectIdState(match.id);
+        saveSubjectId(match.id);
+      }
+    }
+  }, [user.subject, subjectId]);
 
   const threadsRef = useRef(threads);
   const busyRef = useRef(false);
@@ -75,25 +92,21 @@ export function useChat(user: UserProfile) {
       const userMessage: Message = { id: newId('msg'), role: 'user', content: prompt, imageUrls: images, createdAt: now };
       if (images?.length) void saveMessageImages(userMessage.id, images);
       const assistantId = newId('msg');
-      const placeholder: Message = { id: assistantId, role: 'assistant', content: '', createdAt: now };
 
       let threadId = activeThreadId;
-      let history: Message[];
       if (!threadId) {
         threadId = newId('thread');
-        history = [];
         const created: Thread = {
           id: threadId,
           title: prompt.length > 40 ? prompt.slice(0, 40) + '…' : prompt,
           createdAt: now,
           updatedAt: now,
-          messages: [userMessage, placeholder],
+          messages: [userMessage],
         };
         setThreads((prev) => [created, ...prev]);
         setActiveThreadId(threadId);
       } else {
-        history = threadsRef.current.find((t) => t.id === threadId)?.messages ?? [];
-        patchThread(threadId, (t) => ({ ...t, updatedAt: now, messages: [...t.messages, userMessage, placeholder] }));
+        patchThread(threadId, (t) => ({ ...t, updatedAt: now, messages: [...t.messages, userMessage] }));
       }
 
       const targetId = threadId;
@@ -101,25 +114,35 @@ export function useChat(user: UserProfile) {
       try {
         const result = await generateAiResponse({
           prompt,
-          images,
-          history,
           studentClass: user.studentClass,
           subject,
         });
+        const assistantMessage: Message = {
+          id: assistantId,
+          role: 'assistant',
+          content: result.content,
+          sources: result.sources,
+          suggestedFollowups: result.followups,
+          answerId: result.answerId,
+          mode: result.mode,
+          createdAt: new Date().toISOString(),
+        };
         patchThread(targetId, (t) => ({
           ...t,
-          messages: t.messages.map((m) =>
-            m.id === assistantId
-              ? { ...m, content: result.content, sources: result.sources, suggestedFollowups: result.followups }
-              : m
-          ),
+          messages: [...t.messages.filter((m) => m.id !== assistantId), assistantMessage],
         }));
         return result.content;
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Something went wrong.');
+        toast.error(err instanceof Error ? err.message : AI_ERROR_MESSAGE);
+        const fallbackMessage: Message = {
+          id: assistantId,
+          role: 'assistant',
+          content: FALLBACK_REPLY,
+          createdAt: new Date().toISOString(),
+        };
         patchThread(targetId, (t) => ({
           ...t,
-          messages: t.messages.map((m) => (m.id === assistantId ? { ...m, content: FALLBACK_REPLY } : m)),
+          messages: [...t.messages.filter((m) => m.id !== assistantId), fallbackMessage],
         }));
         return null;
       } finally {

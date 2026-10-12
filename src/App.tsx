@@ -7,6 +7,7 @@ import { UserProfile } from './types';
 import { storage } from './lib/storage';
 import { newId } from './lib/id';
 import {
+  fetchStudentByEmailOrPhone,
   fetchUserProfile,
   isSupabaseConfigured,
   signInWithPassword,
@@ -15,6 +16,7 @@ import {
   syncUserProfile,
   userToProfile,
 } from './lib/supabase';
+import { saveSubjectId } from './lib/subjects';
 import { registerPWA } from './phone/pwa';
 
 const DesktopApp = lazy(() =>
@@ -30,27 +32,49 @@ const Splash: React.FC = () => (
 
 export const App: React.FC = () => {
   const { isMobileOrTablet } = useDevice();
-  const [user, setUser] = useState<UserProfile | null>(() => (isSupabaseConfigured ? null : storage.getUser()));
+  const [user, setUser] = useState<UserProfile | null>(() => storage.getUser());
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
 
   useEffect(() => {
     registerPWA();
   }, []);
 
-  /* Cloud mode: the Supabase session is the single source of truth for who is signed in. */
+  /* Session hydration: supports both class_11/12 table students and Supabase Auth sessions */
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
 
     const hydrate = async (authUser: Parameters<typeof userToProfile>[0] | null) => {
       if (!authUser) {
+        // If no active Supabase Auth session, check if student was logged in from class tables
+        const localUser = storage.getUser();
+        if (localUser && localUser.studentClass && !localUser.isGuest) {
+          const fresh = await fetchStudentByEmailOrPhone(localUser.email);
+          if (fresh && !cancelled) {
+            const updated: UserProfile = {
+              ...localUser,
+              name: fresh.name || localUser.name,
+              studentClass: fresh.studentClass,
+              subject: fresh.subject || localUser.subject,
+            };
+            storage.saveUser(updated);
+            setUser(updated);
+            setAuthReady(true);
+            return;
+          } else if (!cancelled) {
+            setUser(localUser);
+            setAuthReady(true);
+            return;
+          }
+        }
         if (!cancelled) {
           setUser(null);
           setAuthReady(true);
         }
         return;
       }
-      const row = await fetchUserProfile(authUser.id);
+
+      const row = await fetchUserProfile(authUser.id, authUser.email);
       const profile = userToProfile(authUser, row);
       if (!row) await syncUserProfile(profile);
       await storage.syncFromSupabase(authUser.id);
@@ -65,8 +89,15 @@ export const App: React.FC = () => {
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // Defer: never await Supabase calls inside this callback (can deadlock the auth client).
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') setTimeout(() => hydrate(session?.user ?? null), 0);
-      if (event === 'SIGNED_OUT') setTimeout(() => hydrate(null), 0);
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        setTimeout(() => hydrate(session?.user ?? null), 0);
+      }
+      if (event === 'SIGNED_OUT') {
+        const local = storage.getUser();
+        if (!local?.studentClass || local?.isGuest) {
+          setTimeout(() => hydrate(null), 0);
+        }
+      }
     });
 
     return () => {
@@ -85,13 +116,24 @@ export const App: React.FC = () => {
     startLocalSession({ id: newId('demo'), name: 'Demo Student', email: '', studentClass: 'Class 12', subject: 'Science', isGuest: true });
   }, [startLocalSession]);
 
-  /** Success needs no navigation: the Supabase SIGNED_IN event hydrates the user. */
+  /** Login handles credentials against class_11_students / class_12_students first, then Supabase Auth. */
   const handleLogin = useCallback(async (userId: string, password: string): Promise<LoginResult> => {
     if (!isSupabaseConfigured) {
       toast.error('Login is unavailable: the cloud service is not configured. Use the demo instead.');
       return 'error';
     }
     const result = await signInWithPassword(userId, password);
+    if (result.status === 'ok') {
+      if (result.profile) {
+        storage.saveUser(result.profile);
+        setUser(result.profile);
+        if (result.profile.subject) {
+          saveSubjectId(result.profile.subject);
+        }
+        toast.success(`Welcome back, ${result.profile.name}!`);
+      }
+      return 'ok';
+    }
     if (result.status === 'error') toast.error(result.message);
     return result.status;
   }, []);

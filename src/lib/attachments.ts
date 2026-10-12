@@ -10,6 +10,34 @@ const readAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+/** Longest edge and JPEG quality for uploaded photos: keeps text in worksheets readable at ~100-250 KB each. */
+const MAX_EDGE = 1280;
+const JPEG_QUALITY = 0.8;
+
+/**
+ * Downscales and re-encodes a photo as JPEG so a 5-photo question stays small (gallery photos are often 3-5 MB each).
+ * Falls back to the original file if the browser can't decode or encode it.
+ */
+export async function compressImage(file: File): Promise<string> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no 2d context');
+    ctx.fillStyle = '#fff'; // JPEG has no transparency
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const out = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+    return out.startsWith('data:image/jpeg') ? out : readAsDataUrl(file);
+  } catch {
+    return readAsDataUrl(file);
+  }
+}
+
 /**
  * Reads the given files as data URLs, keeping only images and never letting the total
  * (existing + new) exceed MAX_IMAGES. Shows a toast when files are skipped.
@@ -25,7 +53,7 @@ export async function readImageFiles(files: File[], existingCount: number): Prom
   const accepted = images.slice(0, room);
 
   try {
-    return await Promise.all(accepted.map(readAsDataUrl));
+    return await Promise.all(accepted.map(compressImage));
   } catch {
     toast.error('Could not read one of the selected photos');
     return [];

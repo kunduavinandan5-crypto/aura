@@ -31,3 +31,6 @@ dist-ssr
 # Graphify output & cache
 graphify-out/
 
+# TypeScript build info
+*.tsbuildinfo
+

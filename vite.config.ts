@@ -125,6 +125,7 @@ export default defineConfig(({ mode }) => {
   const siteUrl = (env.VITE_SITE_URL || '').trim().replace(/\/+$/, '');
 
   return {
+    envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     plugins: [react(), tailwindcss(), seoPlugin(siteUrl), swVersionPlugin()],
     resolve: { alias: { '@': path.resolve(__dirname, './src') } },
     server: { port: 5173, host: true },

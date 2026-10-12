@@ -22,6 +22,168 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
 
 /* ─────────────────────────── Auth ─────────────────────────── */
 
+export interface StudentRecord {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  subject?: string;
+  studentClass: 'Class 11' | 'Class 12';
+}
+
+/**
+ * Looks up student details in class_11_students and class_12_students tables.
+ * Returns studentClass ('Class 11' | 'Class 12'), subject, name, etc.
+ */
+export async function fetchStudentByEmailOrPhone(identifier: string): Promise<StudentRecord | null> {
+  if (!supabase || !identifier?.trim()) return null;
+  const clean = identifier.trim().toLowerCase();
+
+  // 1. Try RPC function first (handles SECURITY DEFINER permissions cleanly)
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('get_student_by_email', {
+      p_identifier: clean,
+    });
+    if (!rpcErr && rpcData) {
+      return {
+        id: rpcData.id,
+        name: rpcData.name,
+        email: rpcData.email || clean,
+        phone: rpcData.phone,
+        subject: rpcData.subject,
+        studentClass: rpcData.student_class || (rpcData.class === 12 ? 'Class 12' : 'Class 11'),
+      };
+    }
+  } catch (_) {}
+
+  // 2. Direct query on class_11_students
+  try {
+    const { data: c11 } = await supabase
+      .from('class_11_students')
+      .select('id, name, email, phone, subject')
+      .or(`email.ilike.${clean},phone.eq.${clean}`)
+      .maybeSingle();
+
+    if (c11) {
+      return {
+        id: c11.id,
+        name: c11.name,
+        email: c11.email || clean,
+        phone: c11.phone,
+        subject: c11.subject,
+        studentClass: 'Class 11',
+      };
+    }
+  } catch (_) {}
+
+  // 3. Direct query on class_12_students
+  try {
+    const { data: c12 } = await supabase
+      .from('class_12_students')
+      .select('id, name, email, phone, subject')
+      .or(`email.ilike.${clean},phone.eq.${clean}`)
+      .maybeSingle();
+
+    if (c12) {
+      return {
+        id: c12.id,
+        name: c12.name,
+        email: c12.email || clean,
+        phone: c12.phone,
+        subject: c12.subject,
+        studentClass: 'Class 12',
+      };
+    }
+  } catch (_) {}
+
+  return null;
+}
+
+/**
+ * Authenticates a student against class_11_students and class_12_students tables.
+ * Admin enters email/phone and password directly into these tables.
+ */
+export async function authenticateStudentFromClassTables(
+  loginId: string,
+  password: string
+): Promise<{ student: StudentRecord | null; error?: string }> {
+  if (!supabase || !loginId?.trim() || !password) return { student: null };
+  const cleanLogin = loginId.trim().toLowerCase();
+  const cleanPass = password.trim();
+
+  // 1. Try secure RPC function if created in Supabase
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('login_student', {
+      p_login: cleanLogin,
+      p_password: cleanPass,
+    });
+    if (!rpcErr && rpcData) {
+      return {
+        student: {
+          id: rpcData.id,
+          name: rpcData.name,
+          email: rpcData.email || cleanLogin,
+          phone: rpcData.phone,
+          subject: rpcData.subject,
+          studentClass: rpcData.student_class || (rpcData.class === 12 ? 'Class 12' : 'Class 11'),
+        },
+      };
+    }
+  } catch (_) {}
+
+  // 2. Direct query on class_11_students
+  try {
+    const { data: c11, error: e11 } = await supabase
+      .from('class_11_students')
+      .select('id, name, email, phone, subject, password')
+      .or(`email.ilike.${cleanLogin},phone.eq.${cleanLogin}`)
+      .eq('password', cleanPass)
+      .maybeSingle();
+
+    if (!e11 && c11) {
+      return {
+        student: {
+          id: c11.id,
+          name: c11.name,
+          email: c11.email || cleanLogin,
+          phone: c11.phone,
+          subject: c11.subject,
+          studentClass: 'Class 11',
+        },
+      };
+    }
+  } catch (e: any) {
+    console.warn('Class 11 table login query:', e);
+  }
+
+  // 3. Direct query on class_12_students
+  try {
+    const { data: c12, error: e12 } = await supabase
+      .from('class_12_students')
+      .select('id, name, email, phone, subject, password')
+      .or(`email.ilike.${cleanLogin},phone.eq.${cleanLogin}`)
+      .eq('password', cleanPass)
+      .maybeSingle();
+
+    if (!e12 && c12) {
+      return {
+        student: {
+          id: c12.id,
+          name: c12.name,
+          email: c12.email || cleanLogin,
+          phone: c12.phone,
+          subject: c12.subject,
+          studentClass: 'Class 12',
+        },
+      };
+    }
+  } catch (e: any) {
+    console.warn('Class 12 table login query:', e);
+  }
+
+  return { student: null };
+}
+
 export function userToProfile(user: User, row?: Partial<UserProfile> | null): UserProfile {
   const meta = (user.user_metadata || {}) as Record<string, string | undefined>;
   return {
@@ -35,18 +197,66 @@ export function userToProfile(user: User, row?: Partial<UserProfile> | null): Us
   };
 }
 
-export type PasswordSignInResult = { status: 'ok' } | { status: 'invalid' } | { status: 'error'; message: string };
+export type PasswordSignInResult =
+  | { status: 'ok'; profile?: UserProfile }
+  | { status: 'invalid' }
+  | { status: 'error'; message: string };
 
-/** The user ID is the account's email address in Supabase Auth. Accounts are created by an administrator. */
+/**
+ * Sign in using email/phone and password.
+ * Prioritizes checking class_11_students and class_12_students tables.
+ * Falls back to Supabase Auth if the user exists there.
+ */
 export async function signInWithPassword(userId: string, password: string): Promise<PasswordSignInResult> {
   if (!supabase) return { status: 'error', message: 'Cloud sign-in is not configured.' };
-  const { error } = await supabase.auth.signInWithPassword({ email: userId, password });
-  if (!error) return { status: 'ok' };
+
+  const cleanUser = userId.trim();
+  const cleanPass = password.trim();
+
+  // 1. Check class_11_students and class_12_students tables first
+  const { student, error: studentErr } = await authenticateStudentFromClassTables(cleanUser, cleanPass);
+  if (student) {
+    const profile: UserProfile = {
+      id: student.id,
+      name: student.name || 'Scholar',
+      email: student.email || cleanUser,
+      studentClass: student.studentClass,
+      subject: student.subject || '',
+      isGuest: false,
+    };
+    return { status: 'ok', profile };
+  }
+
+  // 2. Fallback to Supabase Auth (if created in Auth > Users)
+  const { data: authData, error } = await supabase.auth.signInWithPassword({
+    email: cleanUser,
+    password: cleanPass,
+  });
+
+  if (!error && authData?.user) {
+    // Look up class and subject from class_11_students / class_12_students
+    const studentInfo = await fetchStudentByEmailOrPhone(authData.user.email || cleanUser);
+    const profile = userToProfile(authData.user, {
+      studentClass: studentInfo?.studentClass,
+      subject: studentInfo?.subject,
+      name: studentInfo?.name,
+    });
+    return { status: 'ok', profile };
+  }
+
+  if (studentErr) {
+    console.warn('Student login error:', studentErr);
+  }
+
   // Wrong id and wrong password are deliberately indistinguishable.
-  if (error.status === 400 || /invalid login credentials|invalid (email|credentials)/i.test(error.message)) {
+  if (error && (error.status === 400 || /invalid login credentials|invalid (email|credentials)/i.test(error.message))) {
     return { status: 'invalid' };
   }
-  return { status: 'error', message: error.message };
+  if (error) {
+    return { status: 'error', message: error.message };
+  }
+
+  return { status: 'invalid' };
 }
 
 export async function signOutRemote(): Promise<void> {
@@ -121,17 +331,38 @@ export async function syncUserProfile(profile: UserProfile): Promise<boolean> {
   return !error;
 }
 
-export async function fetchUserProfile(userId: string): Promise<Partial<UserProfile> | null> {
-  if (!supabase || !userId) return null;
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-  if (error || !data) return null;
-  return {
-    name: data.name,
-    email: data.email || '',
-    studentClass: data.student_class || '',
-    subject: data.subject || '',
-    avatarUrl: data.avatar_url || '',
-  };
+export async function fetchUserProfile(userId: string, emailHint?: string): Promise<Partial<UserProfile> | null> {
+  if (!supabase) return null;
+  let profileData: Partial<UserProfile> | null = null;
+  if (userId) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (data) {
+      profileData = {
+        name: data.name,
+        email: data.email || '',
+        studentClass: data.student_class || '',
+        subject: data.subject || '',
+        avatarUrl: data.avatar_url || '',
+      };
+    }
+  }
+
+  // Look up class_11_students and class_12_students tables to get official class & subject
+  const identifier = emailHint || profileData?.email || userId;
+  if (identifier) {
+    const student = await fetchStudentByEmailOrPhone(identifier);
+    if (student) {
+      profileData = {
+        ...(profileData || {}),
+        name: profileData?.name || student.name,
+        email: profileData?.email || student.email,
+        studentClass: student.studentClass,
+        subject: student.subject || profileData?.subject || '',
+      };
+    }
+  }
+
+  return profileData;
 }
 
 /* ─────────────────────────── Searches ─────────────────────────── */

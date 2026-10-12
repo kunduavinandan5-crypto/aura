@@ -5,6 +5,7 @@ export interface RagSourceChunk {
   documentTitle: string;
   snippet: string;
   similarityScore: number;
+  page?: number;
 }
 
 export interface Message {
@@ -15,6 +16,9 @@ export interface Message {
   imageUrls?: string[];
   sources?: RagSourceChunk[];
   suggestedFollowups?: string[];
+  /** Backend answer id (used for /feedback) and how the answer was produced. */
+  answerId?: string;
+  mode?: 'llm' | 'fallback' | 'flagged' | 'no_results' | 'error';
 }
 
 export interface Thread {

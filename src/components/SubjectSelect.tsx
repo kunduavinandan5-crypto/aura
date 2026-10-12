@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { BookOpen, Check, ChevronDown } from 'lucide-react';
 import { SUBJECTS } from '@/lib/subjects';
 
@@ -12,7 +12,7 @@ interface SubjectSelectProps {
   variant?: 'chip' | 'header';
 }
 
-const MENU_HEIGHT = 120; // px of space needed to open downwards
+const MENU_HEIGHT = 160; // px of space needed to open downwards
 
 /** Custom listbox dropdown: keyboard accessible, flips upward near the bottom edge, highlights until chosen. */
 export const SubjectSelect: React.FC<SubjectSelectProps> = ({
@@ -144,7 +144,7 @@ export const SubjectSelect: React.FC<SubjectSelectProps> = ({
           id={listId}
           role="listbox"
           aria-label="Subjects"
-          className={`absolute left-0 z-50 w-52 overflow-hidden rounded-2xl border border-white/10 bg-[#12141f]/98 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl anim-fade-up ${
+          className={`absolute left-0 z-50 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#12141f]/98 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl anim-fade-up ${
             openUp ? 'bottom-full mb-2' : 'top-full mt-2'
           }`}
         >
@@ -161,11 +161,16 @@ export const SubjectSelect: React.FC<SubjectSelectProps> = ({
                   isSelected ? 'text-blue-200' : 'text-zinc-200'
                 } ${i === active ? 'bg-white/10' : ''}`}
               >
-                <span className="flex items-center gap-2.5">
-                  <BookOpen className={`h-4 w-4 ${isSelected ? 'text-blue-300' : 'text-zinc-500'}`} aria-hidden="true" />
-                  {s.label}
+                <span className="flex flex-col gap-0.5">
+                  <span className="flex items-center gap-2.5">
+                    <BookOpen className={`h-4 w-4 shrink-0 ${isSelected ? 'text-blue-300' : 'text-zinc-500'}`} aria-hidden="true" />
+                    {s.label}
+                  </span>
+                  {s.description && (
+                    <span className="pl-6 text-xs text-zinc-500 leading-tight">{s.description}</span>
+                  )}
                 </span>
-                {isSelected && <Check className="h-4 w-4 text-blue-300" aria-hidden="true" />}
+                {isSelected && <Check className="h-4 w-4 shrink-0 text-blue-300" aria-hidden="true" />}
               </li>
             );
           })}

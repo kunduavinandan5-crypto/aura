@@ -13,7 +13,7 @@ npm run dev              # http://localhost:5173
 | Variable | Purpose |
 | --- | --- |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase project + **anon** key. Public by design; data is protected by RLS. |
-| `VITE_RAG_API_URL` | Your AI/RAG backend (`POST` JSON). Required for production builds. |
+| `NEXT_PUBLIC_API_URL` | Base URL of your RAG backend, no trailing slash (e.g. `https://rag11acc.onrender.com`). Required for production builds. |
 | `VITE_SITE_URL` | Public site URL. Drives canonical URL, Open Graph, `sitemap.xml`, `llms.txt`. |
 
 Everything prefixed `VITE_` is shipped to the browser. Never put a Supabase `service_role` key or any Gemini/Anthropic/OpenAI key there; model keys belong on the AI backend, which the app calls with the user's Supabase access token in `Authorization: Bearer`.
@@ -28,7 +28,7 @@ Without Supabase variables the app runs in local-only mode (profile and chats st
 
 ## AI backend contract
 
-`POST VITE_RAG_API_URL` with `{ query, prompt, question, subject, subject_label, system, image?, history[] }`. `subject` is the id picked in the dropdown (see [src/lib/subjects.ts](src/lib/subjects.ts): `accountancy` or `economics`). Users must choose a subject before they can ask; route it to the matching RAG model on your backend. The reply may be a string or an object with `response | answer | content | output | text` (or OpenAI/Gemini shapes), plus optional `sources[]`.
+`POST {NEXT_PUBLIC_API_URL}/ask` with `{ question, student_class?, subject }` (`subject` is the id picked in the dropdown, see [src/lib/subjects.ts](src/lib/subjects.ts); `student_class` is the number from the profile class, e.g. `12`). The reply is `{ answer_id, answer, sources[{document,page}], flagged, mode, provider, top_score }`. Thumbs up/down call `POST {NEXT_PUBLIC_API_URL}/feedback` with `{ answer_id, rating: "up"|"down" }`. Photo attachments are not sent: the `/ask` endpoint is text only.
 
 ## Scripts
 

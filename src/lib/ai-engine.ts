@@ -1,109 +1,118 @@
-import { Message, RagSourceChunk } from '@/types';
-import { supabase } from './supabase';
+import { RagSourceChunk } from '@/types';
 import { Subject } from './subjects';
 
 /**
- * All model calls go through the RAG backend (VITE_RAG_API_URL). Provider API keys
- * (Gemini / Claude / OpenAI) live on that server and must never be bundled into this client.
- * If the user is signed in, their Supabase access token is sent so the backend can verify it.
+ * Chat goes through the deployed RAG backend (NEXT_PUBLIC_API_URL, no trailing slash).
+ * The URL is public by design; no API keys live in this client.
  */
-const RAG_ENDPOINT: string =
-  (import.meta.env.VITE_RAG_API_URL as string | undefined)?.trim() ||
-  (import.meta.env.DEV ? 'http://localhost:8000/api/chat' : '');
+const API_BASE: string = ((import.meta.env.NEXT_PUBLIC_API_URL as string | undefined) ?? '').trim().replace(/\/+$/, '');
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
-const SYSTEM_PROMPT =
-  'You are Aura, an empathetic and brilliant AI Professor and Educational Mentor. ' +
-  'Explain complex ideas using intuitive analogies, structured step-by-step breakdowns, and an encouraging tone.';
+export type AnswerMode = 'llm' | 'fallback' | 'flagged' | 'no_results' | 'error';
 
 export interface AiResult {
   content: string;
   sources?: RagSourceChunk[];
   followups: string[];
+  answerId?: string;
+  mode?: AnswerMode;
+}
+
+/** Thrown for any failure; the message is safe to show to the student. */
+export const AI_ERROR_MESSAGE = 'Sorry, something went wrong. Please try again in a moment.';
+
+/** "Class 11" -> "11". Returns undefined when no class number can be found (backend then uses its default). */
+function classNumber(studentClass?: string): string | undefined {
+  return studentClass?.match(/\d{1,2}/)?.[0];
 }
 
 export async function generateAiResponse(params: {
   prompt: string;
-  images?: string[]; // base64 data URLs
-  history?: Message[];
+  /**
+   * The student's class from their Supabase profile (e.g. "Class 11").
+   * Set by the admin in the profiles table — never entered by the student.
+   * Converted to a plain number ("11") before being sent to the backend.
+   */
   studentClass?: string;
-  /** Subject chosen in the UI; the backend routes to the matching RAG model/collection by `subject` id. */
+  /** Subject selected by the student in the UI (e.g. { id: "accountancy" }). */
   subject: Subject;
 }): Promise<AiResult> {
-  if (!RAG_ENDPOINT) {
-    throw new Error('The AI service is not configured. Set VITE_RAG_API_URL for this deployment.');
+  if (!API_BASE) {
+    throw new Error('The AI service is not configured. Set NEXT_PUBLIC_API_URL for this deployment.');
   }
 
-  const { prompt, images, history = [], studentClass, subject } = params;
-  const profileHint =
-    ` Subject: ${subject.label}.` + (studentClass ? ` Student: ${studentClass}.` : '');
+  const { prompt, studentClass, subject } = params;
+  const body: Record<string, string> = { question: prompt, subject: subject.id.toLowerCase() };
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const token = (await supabase?.auth.getSession())?.data.session?.access_token;
-  if (token) headers.Authorization = `Bearer ${token}`;
+  // student_class comes from the admin-set Supabase profile, not from the subject config.
+  const cls = classNumber(studentClass);
+  if (cls) body.student_class = cls;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  let response: Response;
+  let data: any;
   try {
-    response = await fetch(RAG_ENDPOINT, {
+    const response = await fetch(`${API_BASE}/ask`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
-      body: JSON.stringify({
-        query: prompt,
-        prompt,
-        question: prompt,
-        subject: subject.id,
-        subject_label: subject.label,
-        system: SYSTEM_PROMPT + profileHint,
-        image: images?.[0], // legacy single-image field
-        images,
-        history: history.slice(-6).map(({ role, content }) => ({ role, content })),
-      }),
+      body: JSON.stringify(body),
     });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    data = await response.json();
   } catch (err) {
-    const aborted = err instanceof DOMException && err.name === 'AbortError';
-    throw new Error(aborted ? 'The AI service took too long to respond.' : 'Could not reach the AI service.');
+    // The student only sees the generic message; keep the real cause (CORS, timeout, HTTP status) in the console.
+    console.error('AI request failed:', err);
+    throw new Error(AI_ERROR_MESSAGE);
   } finally {
     clearTimeout(timer);
   }
 
-  if (!response.ok) {
-    throw new Error(`The AI service returned an error (HTTP ${response.status}).`);
+  const content = typeof data?.answer === 'string' ? data.answer.trim() : '';
+  if (!content) throw new Error(AI_ERROR_MESSAGE);
+
+  return {
+    content,
+    sources: extractSources(data.sources),
+    followups: followupsFor(prompt),
+    answerId: typeof data.answer_id === 'string' ? data.answer_id : undefined,
+    mode: data.mode,
+  };
+}
+
+const feedbackSent = new Set<string>();
+
+/** Fire-and-forget, at most once per answer; errors are ignored on purpose. */
+export async function sendAnswerFeedback(answerId: string, rating: 'up' | 'down'): Promise<void> {
+  if (!API_BASE || !answerId || feedbackSent.has(answerId)) return;
+  feedbackSent.add(answerId);
+  try {
+    await fetch(`${API_BASE}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer_id: answerId, rating }),
+    });
+  } catch {
+    /* ignore */
   }
-
-  const data = await response.json().catch(() => null);
-  const content = extractText(data);
-  if (!content) throw new Error('The AI service returned an empty answer.');
-
-  return { content, sources: extractSources(data), followups: followupsFor(prompt) };
 }
 
-function extractText(data: any): string {
-  if (typeof data === 'string') return data.trim();
-  if (!data || typeof data !== 'object') return '';
-  const candidate =
-    data.response ??
-    data.answer ??
-    data.content ??
-    data.output ??
-    data.text ??
-    data.choices?.[0]?.message?.content ??
-    data.candidates?.[0]?.content?.parts?.[0]?.text;
-  return typeof candidate === 'string' ? candidate.trim() : '';
-}
-
-function extractSources(data: any): RagSourceChunk[] | undefined {
-  if (!Array.isArray(data?.sources)) return undefined;
-  return data.sources.map((s: any, i: number) => ({
-    documentId: String(s.documentId ?? s.id ?? `doc_${i}`),
-    documentTitle: String(s.documentTitle ?? s.title ?? s.source ?? 'Reference'),
-    snippet: String(s.snippet ?? s.text ?? s.chunk ?? ''),
-    similarityScore: typeof s.score === 'number' ? s.score : 0,
-  }));
+function extractSources(raw: unknown): RagSourceChunk[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  const out: RagSourceChunk[] = [];
+  for (const s of raw as any[]) {
+    const document = String(s?.document ?? '').trim();
+    if (!document) continue;
+    const page = typeof s?.page === 'number' ? s.page : undefined;
+    const key = `${document}|${page ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ documentId: key, documentTitle: document, page, snippet: '', similarityScore: 0 });
+  }
+  return out.length ? out : undefined;
 }
 
 function followupsFor(prompt: string): string[] {

@@ -102,7 +102,7 @@ export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin, onDemo }) => {
             </button>
 
             <label htmlFor="login-id" className="sr-only">
-              User ID
+              Email or Phone
             </label>
             <div className="relative">
               <User className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -113,7 +113,7 @@ export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin, onDemo }) => {
                 autoComplete="username"
                 autoCapitalize="none"
                 spellCheck={false}
-                placeholder="User ID"
+                placeholder="Email or Phone"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
                 disabled={locked}
