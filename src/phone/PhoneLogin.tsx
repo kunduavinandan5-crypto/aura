@@ -8,12 +8,9 @@ export type LoginResult = 'ok' | 'invalid' | 'error';
 interface PhoneLoginProps {
   /** Verifies the credentials. 'invalid' counts toward the lockout; 'error' (network/config) does not. */
   onLogin: (userId: string, password: string) => Promise<LoginResult>;
-  /** When provided, shows a "Try the demo" button (device-only session, no account). */
-  onDemo?: () => void;
 }
 
-export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin, onDemo }) => {
-  const [showForm, setShowForm] = useState(false);
+export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin }) => {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -91,85 +88,55 @@ export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin, onDemo }) => {
       </div>
 
       <div className="flex flex-col gap-3">
-        {showForm ? (
-          <form onSubmit={handleSubmit} className="space-y-3 animate-fade-in">
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Back
-            </button>
-
-            <label htmlFor="login-id" className="sr-only">
-              Email or Phone
-            </label>
-            <div className="relative">
-              <User className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-              <input
-                id="login-id"
-                type="text"
-                required
-                autoComplete="username"
-                autoCapitalize="none"
-                spellCheck={false}
-                placeholder="Email or Phone"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                disabled={locked}
-                className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-4 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none disabled:opacity-60"
-              />
-            </div>
-
-            <label htmlFor="login-password" className="sr-only">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-              <input
-                id="login-password"
-                type="password"
-                required
-                autoComplete="current-password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={locked}
-                className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-4 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none disabled:opacity-60"
-              />
-            </div>
-
-            {lockNotice}
-
-            <button
-              type="submit"
-              disabled={busy || locked}
-              className="w-full rounded-full bg-gradient-to-r from-[#5942e8] via-[#634df4] to-[#8042f4] py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-60"
-            >
-              {busy ? 'Please wait…' : 'Log in'}
-            </button>
-          </form>
-        ) : (
-          <div className="space-y-3 animate-fade-in">
-            {lockNotice}
-            <button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="w-full rounded-full bg-gradient-to-r from-[#5942e8] via-[#634df4] to-[#8042f4] py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:opacity-95 active:scale-[0.98]"
-            >
-              Log in
-            </button>
-            {onDemo && (
-              <button
-                type="button"
-                onClick={onDemo}
-                className="w-full rounded-full border border-white/10 bg-[#161822] py-3 text-xs font-semibold text-zinc-200 transition-all hover:bg-white/10 active:scale-[0.98]"
-              >
-                Try the demo
-              </button>
-            )}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <label htmlFor="login-id" className="sr-only">
+            Email or Phone
+          </label>
+          <div className="relative">
+            <User className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              id="login-id"
+              type="text"
+              required
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="Email or Phone"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              disabled={locked}
+              className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-4 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none disabled:opacity-60"
+            />
           </div>
-        )}
+
+          <label htmlFor="login-password" className="sr-only">
+            Password
+          </label>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              id="login-password"
+              type="password"
+              required
+              autoComplete="current-password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={locked}
+              className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-4 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none disabled:opacity-60"
+            />
+          </div>
+
+          {lockNotice}
+
+          <button
+            type="submit"
+            disabled={busy || locked}
+            className="w-full rounded-full bg-gradient-to-r from-[#5942e8] via-[#634df4] to-[#8042f4] py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-60"
+          >
+            {busy ? 'Please wait…' : 'Log in'}
+          </button>
+        </form>
       </div>
     </div>
   );

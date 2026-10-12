@@ -5,7 +5,6 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useDevice } from './hooks/useDevice';
 import { UserProfile } from './types';
 import { storage } from './lib/storage';
-import { newId } from './lib/id';
 import {
   fetchStudentByEmailOrPhone,
   fetchUserProfile,
@@ -106,20 +105,10 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const startLocalSession = useCallback((profile: UserProfile) => {
-    storage.saveUser(profile);
-    setUser(profile);
-  }, []);
-
-  /** Temporary demo: a device-only session. It has no Supabase session, so nothing syncs to the cloud. */
-  const handleDemo = useCallback(() => {
-    startLocalSession({ id: newId('demo'), name: 'Demo Student', email: '', studentClass: 'Class 12', subject: 'Science', isGuest: true });
-  }, [startLocalSession]);
-
   /** Login handles credentials against class_11_students / class_12_students first, then Supabase Auth. */
   const handleLogin = useCallback(async (userId: string, password: string): Promise<LoginResult> => {
     if (!isSupabaseConfigured) {
-      toast.error('Login is unavailable: the cloud service is not configured. Use the demo instead.');
+      toast.error('Login is unavailable: Supabase cloud service is not configured.');
       return 'error';
     }
     const result = await signInWithPassword(userId, password);
@@ -159,10 +148,7 @@ export const App: React.FC = () => {
       <div className="flex h-dvh w-screen items-center justify-center overflow-hidden bg-[#07080e]">
         {toaster}
         <main className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-[#07080e]">
-          <PhoneLogin
-            onLogin={handleLogin}
-            onDemo={import.meta.env.VITE_ENABLE_DEMO === 'false' ? undefined : handleDemo}
-          />
+          <PhoneLogin onLogin={handleLogin} />
         </main>
       </div>
     );
