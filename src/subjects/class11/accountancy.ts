@@ -19,7 +19,6 @@ export interface SubjectConfig {
 const accountancyClass11: SubjectConfig = {
   id: 'accountancy',
   label: 'Accountancy',
-  description: 'Financial Accounting – Journal, Ledger, Trial Balance, Financial Statements',
 };
 
 export default accountancyClass11;
