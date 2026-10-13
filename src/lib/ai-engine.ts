@@ -35,6 +35,44 @@ function classNumber(studentClass?: string): string | undefined {
   return studentClass?.match(/\d{1,2}/)?.[0];
 }
 
+export const GIBBERISH_MESSAGE =
+  "I couldn't understand that question. Please type a clear question about your subject, for example: \"What is a partnership deed?\"";
+
+const KEYBOARD_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+
+function isGibberishWord(word: string): boolean {
+  const w = word.toLowerCase();
+  if (/(.)\1{3,}/.test(w)) return true; // "aaaaa"
+  if (w.length >= 4) {
+    for (const row of KEYBOARD_ROWS) {
+      for (let i = 0; i + 4 <= row.length; i++) {
+        const seq = row.slice(i, i + 4);
+        if (w.includes(seq) || w.includes([...seq].reverse().join(''))) return true;
+      }
+    }
+  }
+  if (w.length >= 3 && !/[aeiouy]/.test(w)) return true;
+  if (/[^aeiouy]{6,}/.test(w)) return true;
+  if (w.length >= 6 && (w.match(/[aeiouy]/g)?.length ?? 0) / w.length < 0.25) return true;
+  return false;
+}
+
+/**
+ * Conservative check for random keystrokes ("asdfgh", "qwkjhs"). Only plain Latin-letter
+ * input is judged; digits, formulas and non-Latin scripts (Hindi) always pass through.
+ */
+export function looksLikeGibberish(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (/[^\x00-\x7F]/.test(t) || /\d/.test(t)) return false;
+  const words = t.split(/[^A-Za-z]+/).filter(Boolean);
+  if (!words.length) return true;
+  if (words.length === 1 && words[0].length < 2) return true;
+  const long = words.filter((w) => w.length >= 3);
+  if (!long.length) return false; // short inputs like "GST", "what is it" are left to the backend
+  return long.every(isGibberishWord);
+}
+
 export async function generateAiResponse(params: {
   prompt: string;
   /**
@@ -51,6 +89,10 @@ export async function generateAiResponse(params: {
   const { prompt, studentClass, subject, signal } = params;
   if (signal?.aborted) {
     throw new DOMException('Aborted', 'AbortError');
+  }
+
+  if (looksLikeGibberish(prompt)) {
+    return { content: GIBBERISH_MESSAGE, followups: [], mode: 'no_results' };
   }
 
   const body: Record<string, string> = { question: prompt, subject: subject.id.toLowerCase() };
