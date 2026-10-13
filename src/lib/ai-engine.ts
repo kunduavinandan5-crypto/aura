@@ -161,7 +161,7 @@ export async function generateAiResponse(params: {
   return {
     content,
     sources: undefined, // Hidden per user preference (show only answers)
-    followups: followupsFor(prompt),
+    followups: followupsFor(prompt, data.mode),
     answerId: typeof data.answer_id === 'string' ? data.answer_id : undefined,
     mode: data.mode,
   };
@@ -238,13 +238,18 @@ function extractSources(raw: unknown): RagSourceChunk[] | undefined {
   return out.length ? out : undefined;
 }
 
-function followupsFor(prompt: string): string[] {
-  const p = prompt.toLowerCase();
-  if (/(math|integral|formula|calculate|equation)/.test(p)) {
-    return ['Show me another step-by-step example', 'Give me 2 practice questions on this', 'Explain this with a real-world analogy'];
-  }
-  if (/(code|algorithm|python|javascript|sql)/.test(p)) {
-    return ['What are the edge cases?', 'Can you optimize this?', 'How would I write unit tests for this?'];
-  }
-  return ['Can you break this down with an example?', 'Give me 3 practice MCQs for revision', 'Summarize the top 3 points to remember'];
+/** One follow-up built from the student's own question; none when no real answer was given. */
+function followupsFor(prompt: string, mode?: string): string[] {
+  if (mode && mode !== "llm" && mode !== "fallback") return [];
+  const q = prompt.trim().replace(/[?.!]+$/, "");
+  const topic = q
+    .replace(/^(what|who|why|how|when|which)\s+(is|are|was|were|do|does|did|can|to)\s+/i, "")
+    .replace(/^(define|explain|describe|meaning of|difference between|types of|state|write)\s+/i, "")
+    .replace(/^(a|an|the)\s+/i, "")
+    .trim();
+  if (!topic || topic.length > 60) return ["Give me 3 practice MCQs on this"];
+  if (/^difference between/i.test(q)) return ["Give me 3 practice MCQs on this"];
+  if (/^(what|who|define|meaning)/i.test(q)) return [`Give an example of ${topic}`];
+  if (/^(how|explain|describe)/i.test(q)) return ["Show me a solved example of this"];
+  return [`Explain ${topic} with an example`];
 }
