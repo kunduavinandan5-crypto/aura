@@ -4,7 +4,7 @@
  * a determined user can clear storage, so enforce the same limit on the server (Supabase auth rate limits).
  */
 export const MAX_ATTEMPTS = 5;
-export const LOCK_MS = 30 * 60 * 1000;
+export const LOCK_MS = 5 * 60 * 1000;
 
 const KEY = 'aura_login_attempts';
 
