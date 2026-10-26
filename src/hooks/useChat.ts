@@ -62,6 +62,40 @@ export function useChat(user: UserProfile) {
     storage.saveThreads(threads, user.id);
   }, [threads, user.id]);
 
+  /* Pull chats changed on other devices (same account) when the app regains focus and every 30s while visible. */
+  useEffect(() => {
+    let running = false;
+    const signature = (list: Thread[]) =>
+      list.map((t) => `${t.id}|${t.title}|${t.updatedAt}|${t.isPinned ? 1 : 0}|${t.messages.length}`).join(';');
+    const refresh = async () => {
+      if (running || document.visibilityState !== 'visible' || !navigator.onLine) return;
+      running = true;
+      try {
+        const remote = await storage.pullRemoteThreads(user.id);
+        if (!remote) return;
+        setThreads((prev) => {
+          const next = storage.mergeThreads(prev, remote);
+          return signature(next) === signature(prev) ? prev : next;
+        });
+        storage.markSynced(remote.map((t) => t.id));
+      } catch {
+        /* offline or signed out: try again next tick */
+      } finally {
+        running = false;
+      }
+    };
+    const timer = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+    };
+  }, [user.id]);
+
   /* Photos live in IndexedDB (not in the saved threads); restore them onto their messages on startup. */
   useEffect(() => {
     let cancelled = false;
