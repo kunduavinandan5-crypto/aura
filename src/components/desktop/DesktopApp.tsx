@@ -319,16 +319,10 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
       setInput('');
       setAttachedImages([]);
-      void sendMessage(msgText, images).then((reply) => {
-        if (reply && !isMuted && 'speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(
-            new SpeechSynthesisUtterance(reply.replace(/[`#*_$\-\[\]()]/g, '').slice(0, 200))
-          );
-        }
-      });
+      // Replies are never read aloud automatically; the "Listen" button on an answer does that on request.
+      void sendMessage(msgText, images);
     },
-    [input, attachedImages, isGenerating, subjectId, sendMessage, isMuted]
+    [input, attachedImages, isGenerating, subjectId, sendMessage]
   );
 
   const sendVoice = useCallback(() => {
