@@ -131,11 +131,11 @@ async function postAsk(
 
 /* Repeated questions (many students revise the same syllabus) are answered from this device's cache. */
 const CACHE_KEY = 'aura_answer_cache_v1';
-const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const CACHE_MAX = 40;
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // a week: the study material rarely changes
+const CACHE_MAX = 150;
 
 const answerCacheKey = (subjectId: string, cls: string | undefined, prompt: string) =>
-  `${subjectId}|${cls ?? ''}|${prompt.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[?.!]+$/, '')}`;
+  `${subjectId}|${cls ?? ''}|${prompt.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()}`;
 
 function readCache(): Record<string, { at: number; result: AiResult }> {
   try {
@@ -148,6 +148,23 @@ function readCache(): Record<string, { at: number; result: AiResult }> {
 function readCachedAnswer(key: string): AiResult | null {
   const hit = readCache()[key];
   return hit && Date.now() - hit.at < CACHE_TTL_MS ? hit.result : null;
+}
+
+/** Drops a cached answer the student rated down, so asking again fetches a fresh one. */
+function evictCachedAnswer(answerId: string): void {
+  try {
+    const cache = readCache();
+    let changed = false;
+    for (const [key, entry] of Object.entries(cache)) {
+      if (entry.result.answerId === answerId) {
+        delete cache[key];
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    /* ignore */
+  }
 }
 
 function writeCachedAnswer(key: string, result: AiResult): void {
@@ -305,7 +322,9 @@ const feedbackSent = new Set<string>();
 /** Fire-and-forget, at most once per answer; errors are ignored on purpose. */
 export async function sendAnswerFeedback(answerId: string, rating: 'up' | 'down'): Promise<void> {
   const feedbackBase = customApi || '/api/rag';
-  if (!feedbackBase || !answerId || feedbackSent.has(answerId)) return;
+  if (!feedbackBase || !answerId) return;
+  if (rating === 'down') evictCachedAnswer(answerId); // never serve an answer the student rejected
+  if (feedbackSent.has(answerId)) return;
   feedbackSent.add(answerId);
   try {
     await fetch(`${feedbackBase}/feedback`, {
