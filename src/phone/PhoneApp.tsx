@@ -44,6 +44,7 @@ export const PhoneApp: React.FC<PhoneAppProps> = ({ user, onSignOut, onUpdateUse
         onSendMessage={handleSendMessage}
         onCancel={chat.cancelGeneration}
         subjectId={chat.subjectId}
+        subjects={chat.subjects}
         onSubjectChange={chat.setSubjectId}
         onOpenVoiceMode={() => setIsVoiceModeOpen(true)}
         onOpenDrawer={() => setIsDrawerOpen(true)}

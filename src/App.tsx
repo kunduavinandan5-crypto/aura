@@ -15,7 +15,6 @@ import {
   syncUserProfile,
   userToProfile,
 } from './lib/supabase';
-import { saveSubjectId } from './lib/subjects';
 import { registerPWA } from './phone/pwa';
 
 const DesktopApp = lazy(() =>
@@ -29,8 +28,8 @@ const Splash: React.FC = () => (
   </div>
 );
 
-/** Class-table students are re-verified at most this often (class/subject changes and removals show up within it). */
-const STUDENT_RECHECK_MS = 6 * 60 * 60 * 1000;
+/** Class-table students are re-verified at most this often: an admin's change to a student's class/subject, or removing them, applies within it. */
+const STUDENT_RECHECK_MS = 60 * 60 * 1000;
 
 export const App: React.FC = () => {
   const { isMobileOrTablet } = useDevice();
@@ -141,9 +140,6 @@ export const App: React.FC = () => {
         storage.saveUser(result.profile);
         storage.markStudentChecked();
         setUser(result.profile);
-        if (result.profile.subject) {
-          saveSubjectId(result.profile.subject);
-        }
         toast.success(`Welcome back, ${result.profile.name}!`);
       }
       return 'ok';

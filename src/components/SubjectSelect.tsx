@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { BookOpen, Check, ChevronDown } from 'lucide-react';
-import { SUBJECTS } from '@/lib/subjects';
+import { SUBJECTS as ALL_SUBJECTS, type Subject } from '@/lib/subjects';
 
 interface SubjectSelectProps {
   /** Selected subject id, or '' when nothing is chosen yet. */
@@ -8,6 +8,8 @@ interface SubjectSelectProps {
   onChange: (subjectId: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Subjects this student may use (from their record). Defaults to the full catalog. */
+  subjects?: Subject[];
   /** 'chip' (default) for the input bar; 'header' renders "Aura <subject> v" as a top-bar title. */
   variant?: 'chip' | 'header';
 }
@@ -21,7 +23,10 @@ export const SubjectSelect: React.FC<SubjectSelectProps> = ({
   disabled,
   className = '',
   variant = 'chip',
+  subjects = ALL_SUBJECTS,
 }) => {
+  const SUBJECTS = subjects;
+  const isFixed = SUBJECTS.length === 1; // only one assigned subject: nothing to choose
   const isHeader = variant === 'header';
   const [open, setOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
@@ -33,12 +38,12 @@ export const SubjectSelect: React.FC<SubjectSelectProps> = ({
   const selected = SUBJECTS.find((s) => s.id === value);
 
   const openMenu = useCallback(() => {
-    if (disabled) return;
+    if (disabled || isFixed) return;
     const rect = buttonRef.current?.getBoundingClientRect();
     setOpenUp(Boolean(rect && window.innerHeight - rect.bottom < MENU_HEIGHT));
     setActive(Math.max(0, SUBJECTS.findIndex((s) => s.id === value)));
     setOpen(true);
-  }, [disabled, value]);
+  }, [disabled, isFixed, value, SUBJECTS]);
 
   const close = useCallback((refocus = true) => {
     setOpen(false);
@@ -105,9 +110,10 @@ export const SubjectSelect: React.FC<SubjectSelectProps> = ({
         ref={buttonRef}
         type="button"
         disabled={disabled}
+        tabIndex={isFixed ? -1 : undefined}
         onClick={() => (open ? close() : openMenu())}
-        aria-haspopup="listbox"
-        aria-expanded={open}
+        aria-haspopup={isFixed ? undefined : 'listbox'}
+        aria-expanded={isFixed ? undefined : open}
         aria-controls={listId}
         aria-label={`Subject${selected ? `: ${selected.label}` : ' (required)'}`}
         className={
@@ -133,13 +139,15 @@ export const SubjectSelect: React.FC<SubjectSelectProps> = ({
             <span className="whitespace-nowrap">{selected ? selected.label : 'Select subject'}</span>
           </>
         )}
-        <ChevronDown
-          className={`h-3.5 w-3.5 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-          aria-hidden="true"
-        />
+        {!isFixed && (
+          <ChevronDown
+            className={`h-3.5 w-3.5 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        )}
       </button>
 
-      {open && (
+      {open && !isFixed && (
         <ul
           id={listId}
           role="listbox"

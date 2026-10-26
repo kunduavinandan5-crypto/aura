@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { PhoneOrb } from './PhoneOrb';
 import { SubjectSelect } from '../components/SubjectSelect';
+import type { Subject } from '@/lib/subjects';
 import { CameraCaptureModal } from '../components/camera/CameraCaptureModal';
 import { FeedbackModal } from '../components/feedback/FeedbackModal';
 import { AnswerExtras, SLOW_HINT, useSlowHint } from '@/components/chat/AnswerExtras';
@@ -40,6 +41,7 @@ interface PhoneAssistantProps {
   onSendMessage: (text: string, images?: string[]) => void;
   onCancel?: () => void;
   subjectId: string;
+  subjects: Subject[];
   onSubjectChange: (subjectId: string) => void;
   onOpenVoiceMode?: () => void;
   onOpenDrawer: () => void;
@@ -77,6 +79,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   onSendMessage,
   onCancel,
   subjectId,
+  subjects,
   onSubjectChange,
   onOpenDrawer,
 }) => {
@@ -494,7 +497,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           <Menu className="h-5 w-5" />
         </button>
 
-        <SubjectSelect variant="header" value={subjectId} onChange={onSubjectChange} disabled={isGenerating} />
+        <SubjectSelect variant="header" value={subjectId} onChange={onSubjectChange} subjects={subjects} disabled={isGenerating} />
 
         <button
           onClick={toggleMute}

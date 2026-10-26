@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Message, Thread, UserProfile } from '@/types';
 import { storage } from '@/lib/storage';
 import { AI_ERROR_MESSAGE, UserFacingError, generateAiResponse } from '@/lib/ai-engine';
 import { newId } from '@/lib/id';
-import { getSubject, loadSubjectId, saveSubjectId } from '@/lib/subjects';
+import { SUBJECTS, assignedSubjects, loadSubjectId, saveSubjectId } from '@/lib/subjects';
 import { loadAllMessageImages, saveMessageImages } from '@/lib/imageStore';
 
 const FALLBACK_REPLY = AI_ERROR_MESSAGE;
@@ -15,32 +15,27 @@ export function useChat(user: UserProfile) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   /** Ids of the threads that currently have a reply in flight (each chat generates independently). */
   const [generatingIds, setGeneratingIds] = useState<string[]>([]);
-  const [subjectId, setSubjectIdState] = useState(() => {
-    const saved = loadSubjectId();
-    if (saved) return saved;
-    if (user.subject) {
-      const match = getSubject(user.subject);
-      if (match) return match.id;
-    }
-    return '';
-  });
+  /*
+   * Subjects come from the student's record in Supabase (set by the admin): a student can only use the
+   * subject(s) assigned to them. Accounts with no subject assigned (e.g. admin-created logins) keep the full list.
+   */
+  const subjects = useMemo(() => {
+    const assigned = assignedSubjects(user.subject);
+    return assigned.length ? assigned : SUBJECTS;
+  }, [user.subject]);
+  const [chosenSubjectId, setChosenSubjectId] = useState(() => loadSubjectId());
+  // A saved choice only counts while it is still one of the student's subjects; a single subject is always used.
+  const subjectId = subjects.find((s) => s.id === chosenSubjectId)?.id ?? (subjects.length === 1 ? subjects[0].id : '');
 
-  const setSubjectId = useCallback((id: string) => {
-    const next = getSubject(id)?.id;
-    if (!next) return;
-    setSubjectIdState(next);
-    saveSubjectId(next);
-  }, []);
-
-  useEffect(() => {
-    if (!subjectId && user.subject) {
-      const match = getSubject(user.subject);
-      if (match) {
-        setSubjectIdState(match.id);
-        saveSubjectId(match.id);
-      }
-    }
-  }, [user.subject, subjectId]);
+  const setSubjectId = useCallback(
+    (id: string) => {
+      const next = subjects.find((s) => s.id === id)?.id;
+      if (!next) return;
+      setChosenSubjectId(next);
+      saveSubjectId(next);
+    },
+    [subjects]
+  );
 
   const threadsRef = useRef(threads);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -134,7 +129,7 @@ export function useChat(user: UserProfile) {
       // Clear any prior toasts (e.g. "Photo attached") so toasts never stack or overlap
       toast.dismiss();
 
-      const subject = getSubject(subjectId);
+      const subject = subjects.find((s) => s.id === subjectId);
       if (!subject) {
         toast.error('Please select a subject before asking a question.');
         return null;
@@ -218,7 +213,7 @@ export function useChat(user: UserProfile) {
         }
       }
     },
-    [activeThreadId, user.id, user.studentClass, subjectId]
+    [activeThreadId, user.id, user.studentClass, subjectId, subjects]
   );
 
   const startNewChat = useCallback(() => setActiveThreadId(null), []);
@@ -251,6 +246,7 @@ export function useChat(user: UserProfile) {
     isGenerating,
     cancelGeneration,
     subjectId,
+    subjects,
     setSubjectId,
     sendMessage,
     startNewChat,

@@ -1,6 +1,7 @@
 import { RagSourceChunk } from '@/types';
 import { Subject } from './subjects';
 import { extractTextFromImages } from './ocr';
+import { buildAskBody } from './askBody';
 
 /**
  * Chat goes through the deployed RAG backend (NEXT_PUBLIC_API_URL, no trailing slash).
@@ -16,7 +17,7 @@ const customApi = (
   .replace(/^["']|["']$/g, '')
   .replace(/\/+$/, '');
 
-const REQUEST_TIMEOUT_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 100_000;
 
 export type AnswerMode = 'llm' | 'fallback' | 'flagged' | 'no_results' | 'error';
 
@@ -36,11 +37,6 @@ export class UserFacingError extends Error {}
 
 export const PHOTO_UNREADABLE_MESSAGE =
   "I couldn't read a question in that photo. Please retake it closer, in good light and with the page flat, or type the question.";
-
-/** "Class 11" -> "11". Returns undefined when no class number can be found (backend then uses its default). */
-function classNumber(studentClass?: string): string | undefined {
-  return studentClass?.match(/\d{1,2}/)?.[0];
-}
 
 export const GIBBERISH_MESSAGE =
   "I couldn't understand that question. Please type a clear question about your subject, for example: \"What is a partnership deed?\"";
@@ -100,7 +96,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 /** One POST to `<endpoint>/ask`. Throws on network failure/abort; a 'TimeoutError' when the backend is too slow. */
 async function postAsk(
   endpoint: string,
-  body: Record<string, string>,
+  body: object,
   signal?: AbortSignal
 ): Promise<{ ok: boolean; status: number; data?: any }> {
   const controller = new AbortController();
@@ -139,7 +135,7 @@ const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const CACHE_MAX = 40;
 
 const answerCacheKey = (subjectId: string, cls: string | undefined, prompt: string) =>
-  `${subjectId}|${cls ?? ''}|${prompt.trim().toLowerCase().replace(/s+/g, ' ').replace(/[?.!]+$/, '')}`;
+  `${subjectId}|${cls ?? ''}|${prompt.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[?.!]+$/, '')}`;
 
 function readCache(): Record<string, { at: number; result: AiResult }> {
   try {
@@ -201,11 +197,9 @@ export async function generateAiResponse(params: {
     return { content: GIBBERISH_MESSAGE, followups: [], mode: 'no_results' };
   }
 
-  const body: Record<string, string> = { question: prompt, subject: subject.id.toLowerCase() };
-
-  // student_class comes from the admin-set Supabase profile, not from the subject config.
-  const cls = classNumber(studentClass);
-  if (cls) body.student_class = cls;
+  // subject = the dropdown selection (lowercased); class = the student's own class from their account ("Class 12" -> "12").
+  const body = buildAskBody(prompt, studentClass, subject.id);
+  const cls = body.student_class;
 
   const cacheKey = answerCacheKey(subject.id, cls, prompt);
   const cached = readCachedAnswer(cacheKey);

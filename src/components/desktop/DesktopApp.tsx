@@ -80,6 +80,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
     isGenerating,
     cancelGeneration,
     subjectId,
+    subjects,
     setSubjectId,
     sendMessage,
     deleteThread,
@@ -592,7 +593,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
             <ImageIcon className="h-4 w-4" />
           </button>
 
-          <SubjectSelect value={subjectId} onChange={setSubjectId} disabled={isGenerating} />
+          <SubjectSelect value={subjectId} onChange={setSubjectId} subjects={subjects} disabled={isGenerating} />
 
           <input
             ref={textareaRef}
