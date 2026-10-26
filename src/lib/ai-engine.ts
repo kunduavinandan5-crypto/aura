@@ -130,7 +130,7 @@ async function postAsk(
 }
 
 /* Repeated questions (many students revise the same syllabus) are answered from this device's cache. */
-const CACHE_KEY = 'aura_answer_cache_v1';
+const CACHE_KEY = 'aura_answer_cache_v2';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // a week: the study material rarely changes
 const CACHE_MAX = 150;
 
@@ -353,18 +353,29 @@ function extractSources(raw: unknown): RagSourceChunk[] | undefined {
   return out.length ? out : undefined;
 }
 
-/** One follow-up built from the student's own question; none when no real answer was given. */
+/**
+ * Follow-up suggestions built from the student's own question. The backend has no memory of earlier
+ * questions, so every suggestion must name its topic and make sense on its own (never "on this").
+ * None when no real answer was given or no clean topic can be found.
+ */
 function followupsFor(prompt: string, mode?: string): string[] {
-  if (mode && mode !== "llm" && mode !== "fallback") return [];
-  const q = prompt.trim().replace(/[?.!]+$/, "");
-  const topic = q
-    .replace(/^(what|who|why|how|when|which)\s+(is|are|was|were|do|does|did|can|to)\s+/i, "")
-    .replace(/^(define|explain|describe|meaning of|difference between|types of|state|write)\s+/i, "")
-    .replace(/^(a|an|the)\s+/i, "")
+  if (mode && mode !== 'llm' && mode !== 'fallback') return [];
+  const q = prompt.trim().replace(/[?.!]+$/, '');
+  const whWord = /^(w?hat|who|why|how|when|which)\s+(is|are|was|were|do|does|did|can|to)\s+/i;
+  // "how to prepare a trial balance" reads best whole; the other question types are reduced to their subject.
+  const topic = /^how\b/i.test(q)
+    ? q.charAt(0).toLowerCase() + q.slice(1)
+    : q
+    .replace(whWord, '')
+    .replace(/^(define|explain|describe|meaning of|difference between|types of|state|write)\s+/i, '')
+    .replace(whWord, '') // "explain what is X"
+    .replace(/^(a|an|the)\s+/i, '')
     .trim();
-  if (!topic || topic.length > 60) return ["Give me 3 practice MCQs on this"];
-  if (/^difference between/i.test(q)) return ["Give me 3 practice MCQs on this"];
-  if (/^(what|who|define|meaning)/i.test(q)) return [`Give an example of ${topic}`];
-  if (/^(how|explain|describe)/i.test(q)) return ["Show me a solved example of this"];
-  return [`Explain ${topic} with an example`];
+  if (!topic || topic.length > 70 || topic.split(/\s+/).length > 12) return [];
+
+  const mcqs = `Give me 3 practice MCQs on ${topic}`;
+  if (/^difference between/i.test(q)) return [mcqs, `Explain ${topic} with an example`];
+  if (/^(w?hat|who|define|meaning)/i.test(q)) return [`Give an example of ${topic}`, mcqs];
+  if (/^(how|explain|describe)/i.test(q)) return [`Show me a solved example of ${topic}`, mcqs];
+  return [`Explain ${topic} with an example`, mcqs];
 }
