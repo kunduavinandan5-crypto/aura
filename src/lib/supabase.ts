@@ -469,25 +469,33 @@ export async function submitMessageFeedback(feedback: MessageFeedback): Promise<
   if (!supabase) return true;
 
   try {
-    const validUuid = feedback.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(feedback.userId)
-      ? feedback.userId
-      : null;
+    // user_id has a foreign key to auth.users, so it may only hold a real Supabase Auth id. Students who sign in
+    // through the class tables have no Auth account: their id goes in student_id (no foreign key) instead.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const authId = sessionData.session?.user.id ?? null;
+    const isAuthUser = Boolean(authId && authId === feedback.userId);
 
-    const { error } = await supabase.from('message_feedback').insert({
+    const row = {
       id,
       message_id: feedback.messageId,
       thread_id: feedback.threadId || null,
-      user_id: validUuid,
+      user_id: isAuthUser ? authId : null,
       user_email: feedback.userEmail || null,
       rating: feedback.rating,
       reason: feedback.reason || null,
       comment: feedback.comment || null,
       message_snippet: feedback.messageSnippet ? feedback.messageSnippet.slice(0, 1000) : null,
       subject_id: feedback.subjectId || null,
-    });
+    };
+
+    let { error } = await supabase.from('message_feedback').insert({ ...row, student_id: isAuthUser ? null : feedback.userId || null });
+    // Database not migrated yet (no student_id column): still record the feedback without it.
+    if (error && /student_id|PGRST204/i.test(`${error.code ?? ''} ${error.message}`)) {
+      ({ error } = await supabase.from('message_feedback').insert(row));
+    }
 
     if (error) {
-      console.warn('Supabase submitMessageFeedback error:', error.message);
+      console.warn('Supabase submitMessageFeedback error:', error.code, error.message);
       return false;
     }
     return true;

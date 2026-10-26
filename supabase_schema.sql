@@ -117,6 +117,10 @@ CREATE TABLE IF NOT EXISTS public.message_feedback (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Students who sign in through class_11_students / class_12_students have no auth.users row, so their id
+-- cannot go in user_id (foreign key). It is stored here instead.
+ALTER TABLE public.message_feedback ADD COLUMN IF NOT EXISTS student_id TEXT;
+
 -- 9. INDEXES FOR FEEDBACK -----------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_message_feedback_created ON public.message_feedback (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_message_feedback_msg     ON public.message_feedback (message_id);
@@ -133,7 +137,7 @@ CREATE POLICY "message_feedback: insert access" ON public.message_feedback
 DROP POLICY IF EXISTS "message_feedback: owner select" ON public.message_feedback;
 CREATE POLICY "message_feedback: owner select" ON public.message_feedback
   FOR SELECT TO authenticated
-  USING (user_id IS NULL OR user_id = (SELECT auth.uid()));
+  USING (user_id = (SELECT auth.uid()));
 
 -- Permissions
 REVOKE ALL ON public.profiles, public.user_searches, public.threads, public.messages FROM anon;
