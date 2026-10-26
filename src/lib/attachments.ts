@@ -10,9 +10,9 @@ const readAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-/** Longest edge and JPEG quality for uploaded photos: keeps text in worksheets readable at ~100-250 KB each. */
-const MAX_EDGE = 1280;
-const JPEG_QUALITY = 0.8;
+/** Longest edge and JPEG quality for attached photos: enough resolution for the text on a textbook page to be read (OCR). */
+const MAX_EDGE = 2000;
+const JPEG_QUALITY = 0.85;
 
 /**
  * Downscales and re-encodes a photo as JPEG so a 5-photo question stays small (gallery photos are often 3-5 MB each).

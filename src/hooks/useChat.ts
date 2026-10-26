@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Message, Thread, UserProfile } from '@/types';
 import { storage } from '@/lib/storage';
-import { AI_ERROR_MESSAGE, generateAiResponse } from '@/lib/ai-engine';
+import { AI_ERROR_MESSAGE, UserFacingError, generateAiResponse } from '@/lib/ai-engine';
 import { newId } from '@/lib/id';
 import { getSubject, loadSubjectId, saveSubjectId } from '@/lib/subjects';
 import { loadAllMessageImages, saveMessageImages } from '@/lib/imageStore';
@@ -170,7 +170,8 @@ export function useChat(user: UserProfile) {
       setThreadGenerating(targetId, true);
       try {
         const result = await generateAiResponse({
-          prompt,
+          prompt: text.trim(),
+          images,
           studentClass: user.studentClass,
           subject,
           signal: abortController.signal,
@@ -200,7 +201,7 @@ export function useChat(user: UserProfile) {
         const fallbackMessage: Message = {
           id: assistantId,
           role: 'assistant',
-          content: FALLBACK_REPLY,
+          content: err instanceof UserFacingError ? err.message : FALLBACK_REPLY,
           createdAt: new Date().toISOString(),
         };
         patchThread(targetId, (t) => ({

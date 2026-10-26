@@ -1,5 +1,6 @@
 import { RagSourceChunk } from '@/types';
 import { Subject } from './subjects';
+import { extractTextFromImages } from './ocr';
 
 /**
  * Chat goes through the deployed RAG backend (NEXT_PUBLIC_API_URL, no trailing slash).
@@ -29,6 +30,12 @@ export interface AiResult {
 
 /** Thrown for any failure; the message is safe to show to the student. */
 export const AI_ERROR_MESSAGE = 'Sorry, something went wrong. Please try again in a moment.';
+
+/** An error whose message is meant to be shown to the student as-is (in the chat and in a toast). */
+export class UserFacingError extends Error {}
+
+export const PHOTO_UNREADABLE_MESSAGE =
+  "I couldn't read a question in that photo. Please retake it closer, in good light and with the page flat, or type the question.";
 
 /** "Class 11" -> "11". Returns undefined when no class number can be found (backend then uses its default). */
 function classNumber(studentClass?: string): string | undefined {
@@ -172,13 +179,25 @@ export async function generateAiResponse(params: {
   subject: Subject;
   /** Optional cancellation signal from user stopping generation. */
   signal?: AbortSignal;
+  /** Attached photos (data URLs). Their text is read on the device and sent as the question. */
+  images?: string[];
 }): Promise<AiResult> {
-  const { prompt, studentClass, subject, signal } = params;
+  const { studentClass, subject, signal, images } = params;
+  let prompt = params.prompt.trim();
+  let photoNote = '';
   if (signal?.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  if (looksLikeGibberish(prompt)) {
+  if (images?.length) {
+    // The backend is text-only: read the question out of the photo(s) and append it to anything typed.
+    const scanned = await extractTextFromImages(images, signal);
+    if (!scanned && prompt.length < 15) throw new UserFacingError(PHOTO_UNREADABLE_MESSAGE);
+    if (scanned) {
+      photoNote = `> **Read from your photo:** ${scanned}\n\n`;
+      prompt = [prompt, scanned].filter(Boolean).join(' ');
+    }
+  } else if (looksLikeGibberish(prompt)) {
     return { content: GIBBERISH_MESSAGE, followups: [], mode: 'no_results' };
   }
 
@@ -190,7 +209,7 @@ export async function generateAiResponse(params: {
 
   const cacheKey = answerCacheKey(subject.id, cls, prompt);
   const cached = readCachedAnswer(cacheKey);
-  if (cached) return cached;
+  if (cached) return photoNote ? { ...cached, content: photoNote + cached.content } : cached;
 
   // Same-origin /api/rag proxy first (no CORS), then the direct URLs. They all reach the SAME backend, so
   // we only move on when an endpoint is unreachable (or missing, 404) — never after the backend answered
@@ -217,13 +236,13 @@ export async function generateAiResponse(params: {
         data = res.data;
         break;
       }
-      if (res.status === 429) throw new Error(BUSY_MESSAGE);
+      if (res.status === 429) throw new UserFacingError(BUSY_MESSAGE);
       lastError = new Error(`HTTP ${res.status}`);
       if (res.status === 404) continue; // proxy not present (e.g. local dev): try the next URL
       break;
     } catch (err: any) {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      if (err?.message === BUSY_MESSAGE) throw err;
+      if (err instanceof UserFacingError) throw err;
       lastError = err;
       if (err?.name === 'TimeoutError') break; // backend reachable but too slow: don't stack more waiting
     }
@@ -247,7 +266,7 @@ export async function generateAiResponse(params: {
     mode: data.mode,
   };
   if (data.mode === 'llm') writeCachedAnswer(cacheKey, result);
-  return result;
+  return photoNote ? { ...result, content: photoNote + result.content } : result;
 }
 
 /**
