@@ -73,6 +73,93 @@ export function looksLikeGibberish(text: string): boolean {
   return long.every(isGibberishWord);
 }
 
+export const BUSY_MESSAGE = 'The server is busy right now. Please try again in a few seconds.';
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException('Aborted', 'AbortError'));
+      },
+      { once: true }
+    );
+  });
+}
+
+/** One POST to `<endpoint>/ask`. Throws on network failure/abort; a 'TimeoutError' when the backend is too slow. */
+async function postAsk(
+  endpoint: string,
+  body: Record<string, string>,
+  signal?: AbortSignal
+): Promise<{ ok: boolean; status: number; data?: any }> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort, { once: true });
+  try {
+    const response = await fetch(`${endpoint}/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) return { ok: false, status: response.status };
+    return { ok: true, status: response.status, data: await response.json() };
+  } catch (err: any) {
+    if (timedOut) {
+      const e = new Error('Request timed out');
+      e.name = 'TimeoutError';
+      throw e;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/* Repeated questions (many students revise the same syllabus) are answered from this device's cache. */
+const CACHE_KEY = 'aura_answer_cache_v1';
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const CACHE_MAX = 40;
+
+const answerCacheKey = (subjectId: string, cls: string | undefined, prompt: string) =>
+  `${subjectId}|${cls ?? ''}|${prompt.trim().toLowerCase().replace(/s+/g, ' ').replace(/[?.!]+$/, '')}`;
+
+function readCache(): Record<string, { at: number; result: AiResult }> {
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_KEY) ?? '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function readCachedAnswer(key: string): AiResult | null {
+  const hit = readCache()[key];
+  return hit && Date.now() - hit.at < CACHE_TTL_MS ? hit.result : null;
+}
+
+function writeCachedAnswer(key: string, result: AiResult): void {
+  try {
+    const cache = readCache();
+    cache[key] = { at: Date.now(), result };
+    const newest = Object.entries(cache)
+      .sort((x, y) => y[1].at - x[1].at)
+      .slice(0, CACHE_MAX);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(newest)));
+  } catch {
+    /* storage full or blocked: skip caching */
+  }
+}
+
 export async function generateAiResponse(params: {
   prompt: string;
   /**
@@ -101,8 +188,13 @@ export async function generateAiResponse(params: {
   const cls = classNumber(studentClass);
   if (cls) body.student_class = cls;
 
-  // Try same-origin /api/rag proxy first (bypasses browser CORS restrictions completely),
-  // then fallback to direct Render URLs.
+  const cacheKey = answerCacheKey(subject.id, cls, prompt);
+  const cached = readCachedAnswer(cacheKey);
+  if (cached) return cached;
+
+  // Same-origin /api/rag proxy first (no CORS), then the direct URLs. They all reach the SAME backend, so
+  // we only move on when an endpoint is unreachable (or missing, 404) — never after the backend answered
+  // with an error, which would just multiply the load on an already struggling server.
   const candidateEndpoints = [
     '/api/rag',
     customApi,
@@ -113,38 +205,27 @@ export async function generateAiResponse(params: {
   let lastError: any = null;
 
   for (const endpoint of candidateEndpoints) {
-    if (signal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const onSignalAbort = () => controller.abort();
-    if (signal) {
-      signal.addEventListener('abort', onSignalAbort, { once: true });
-    }
-
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     try {
-      const response = await fetch(`${endpoint}/ask`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify(body),
-      });
-      if (response.ok) {
-        data = await response.json();
-        clearTimeout(timer);
+      let res = await postAsk(endpoint, body, signal);
+      if (!res.ok && RETRYABLE_STATUS.has(res.status)) {
+        // Free-tier hosts return 502/503/504 while waking up: wait once, then retry the same endpoint.
+        await delay(3000, signal);
+        res = await postAsk(endpoint, body, signal);
+      }
+      if (res.ok) {
+        data = res.data;
         break;
       }
+      if (res.status === 429) throw new Error(BUSY_MESSAGE);
+      lastError = new Error(`HTTP ${res.status}`);
+      if (res.status === 404) continue; // proxy not present (e.g. local dev): try the next URL
+      break;
     } catch (err: any) {
-      if (signal?.aborted) {
-        throw new DOMException('Aborted', 'AbortError');
-      }
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (err?.message === BUSY_MESSAGE) throw err;
       lastError = err;
-    } finally {
-      clearTimeout(timer);
-      if (signal) {
-        signal.removeEventListener('abort', onSignalAbort);
-      }
+      if (err?.name === 'TimeoutError') break; // backend reachable but too slow: don't stack more waiting
     }
   }
 
@@ -158,13 +239,15 @@ export async function generateAiResponse(params: {
 
   const content = cleanAnswerContent(rawAnswer);
 
-  return {
+  const result: AiResult = {
     content,
     sources: undefined, // Hidden per user preference (show only answers)
     followups: followupsFor(prompt, data.mode),
     answerId: typeof data.answer_id === 'string' ? data.answer_id : undefined,
     mode: data.mode,
   };
+  if (data.mode === 'llm') writeCachedAnswer(cacheKey, result);
+  return result;
 }
 
 /**

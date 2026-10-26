@@ -18,6 +18,10 @@ const USER_KEY = 'aura_user_profile_v2';
 const PENDING_DELETES_KEY = 'aura_pending_thread_deletes_v1';
 /** Conversation ids known to exist in the cloud; one missing from a later fetch was deleted on another device. */
 const SYNCED_KEY = 'aura_synced_thread_ids_v1';
+/** When the student's account was last re-verified against the class tables (ms epoch). */
+const CHECKED_KEY = 'aura_student_checked_at_v1';
+/** id -> signature of the version last uploaded, so only changed chats are re-sent. */
+const PUSHED_KEY = 'aura_pushed_thread_sigs_v1';
 
 /** Keys written by older builds; wiped on sign-out so no student data lingers on shared devices. */
 const LEGACY_KEYS = [
@@ -54,6 +58,8 @@ function write(key: string, value: unknown): void {
 
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
 
+const threadSig = (t: Thread) => `${t.updatedAt}|${t.messages.length}|${t.title}|${t.isPinned ? 1 : 0}`;
+
 export const storage = {
   getThreads(): Thread[] {
     return read<Thread[]>(THREADS_KEY, []);
@@ -69,10 +75,28 @@ export const storage = {
     if (!userId) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
-      syncThreads(slim, userId)
-        .then((ok) => ok && this.markSynced(slim.map((t) => t.id)))
+      const pushed = read<Record<string, string>>(PUSHED_KEY, {});
+      const dirty = slim.filter((t) => pushed[t.id] !== threadSig(t));
+      if (!dirty.length) return;
+      syncThreads(dirty, userId)
+        .then((ok) => {
+          if (!ok) return;
+          const now = read<Record<string, string>>(PUSHED_KEY, {});
+          for (const t of dirty) now[t.id] = threadSig(t);
+          write(PUSHED_KEY, now);
+          this.markSynced(dirty.map((t) => t.id));
+        })
         .catch(() => {});
     }, 1500);
+  },
+
+  /** True when the student account was verified within `maxAgeMs`; avoids re-querying on every app launch. */
+  studentCheckedRecently(maxAgeMs: number): boolean {
+    return Date.now() - read<number>(CHECKED_KEY, 0) < maxAgeMs;
+  },
+
+  markStudentChecked(): void {
+    write(CHECKED_KEY, Date.now());
   },
 
   getUser(): UserProfile | null {
@@ -126,6 +150,8 @@ export const storage = {
     clearTimeout(syncTimer);
     localStorage.removeItem(THREADS_KEY);
     localStorage.removeItem(SEARCHES_KEY);
+    localStorage.removeItem(PUSHED_KEY);
+    localStorage.removeItem(SYNCED_KEY);
     void clearMessageImages();
     if (userId) await deleteRemoteUserData(userId);
   },
@@ -133,7 +159,7 @@ export const storage = {
   /** Remove everything this app stored in the browser (used on sign-out). */
   wipeLocal(): void {
     clearTimeout(syncTimer);
-    [THREADS_KEY, SEARCHES_KEY, USER_KEY, SYNCED_KEY, ...LEGACY_KEYS].forEach((k) => localStorage.removeItem(k));
+    [THREADS_KEY, SEARCHES_KEY, USER_KEY, SYNCED_KEY, PUSHED_KEY, CHECKED_KEY, ...LEGACY_KEYS].forEach((k) => localStorage.removeItem(k));
     void clearMessageImages();
   },
 
@@ -184,8 +210,7 @@ export const storage = {
   /** Fetch chats from the cloud (null when unavailable) and remember which ids exist there. */
   async pullRemoteThreads(userId: string): Promise<Thread[] | null> {
     await this.flushPendingDeletes();
-    const remote = await fetchRemoteThreads(userId);
-    return remote;
+    return fetchRemoteThreads(userId, this.getThreads());
   },
 
   /** Pull chats and searches from Supabase down to local state. */

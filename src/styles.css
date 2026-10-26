@@ -101,3 +101,26 @@ html {
   font-weight: 600;
   color: #ffffff;
 }
+/* Markdown tables (remark-gfm) */
+.prose-chat table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.85em;
+}
+
+.prose-chat th,
+.prose-chat td {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose-chat th {
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 600;
+  color: #ffffff;
+}

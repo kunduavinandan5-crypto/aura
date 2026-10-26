@@ -49,9 +49,27 @@ CREATE INDEX IF NOT EXISTS idx_class_12_students_email ON public.class_12_studen
 CREATE INDEX IF NOT EXISTS idx_class_11_students_phone ON public.class_11_students (phone);
 CREATE INDEX IF NOT EXISTS idx_class_12_students_phone ON public.class_12_students (phone);
 
--- 3. Secure Student Login Function (SECURITY DEFINER) -------------------------
--- This allows students on the login screen (anon role) to authenticate safely
--- without exposing everyone's passwords or personal data to public scraping.
+-- 3. Lock the student tables down ---------------------------------------------
+-- The browser must NEVER read these tables directly (they hold passwords and phone numbers).
+-- All access goes through the SECURITY DEFINER functions below, which bypass RLS.
+ALTER TABLE public.class_11_students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.class_12_students ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.class_11_students, public.class_12_students FROM anon, authenticated;
+
+-- 3b. Server-side brute-force throttle (the browser lock can be bypassed by clearing storage) ----
+CREATE TABLE IF NOT EXISTS public.login_attempts (
+  login        TEXT PRIMARY KEY,
+  fails        INT NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.login_attempts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.login_attempts FROM anon, authenticated;
+
+-- 3c. Secure Student Login Function (SECURITY DEFINER) ------------------------
+-- One call per sign-in. After 10 wrong passwords for the same login the id is locked for 5 minutes
+-- (generous on purpose: many students may share one id). Passwords stay plain text so you can read
+-- and edit them in the Supabase table editor.
 CREATE OR REPLACE FUNCTION public.login_student(p_login TEXT, p_password TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -60,41 +78,57 @@ SET search_path = public
 AS $$
 DECLARE
   v_student RECORD;
-  v_clean_login TEXT;
-  v_clean_pass TEXT;
+  v_login TEXT;
+  v_pass  TEXT;
+  v_att   RECORD;
 BEGIN
-  v_clean_login := lower(trim(p_login));
-  v_clean_pass  := trim(p_password);
+  v_login := lower(trim(p_login));
+  IF position('@' in v_login) = 0 THEN
+    v_login := regexp_replace(v_login, '[\s-]', '', 'g');
+  END IF;
+  v_pass := trim(p_password);
 
-  -- Check Class 11
+  SELECT * INTO v_att FROM public.login_attempts WHERE login = v_login;
+  IF FOUND AND v_att.locked_until IS NOT NULL AND v_att.locked_until > now() THEN
+    RAISE EXCEPTION 'too_many_attempts';
+  END IF;
+
   SELECT id, name, email, phone, subject, 'Class 11' AS student_class
   INTO v_student
   FROM public.class_11_students
-  WHERE (lower(email) = v_clean_login OR phone = v_clean_login)
-    AND password = v_clean_pass
+  WHERE (lower(email) = v_login OR phone = v_login)
+    AND password = v_pass
   LIMIT 1;
 
+  IF NOT FOUND THEN
+    SELECT id, name, email, phone, subject, 'Class 12' AS student_class
+    INTO v_student
+    FROM public.class_12_students
+    WHERE (lower(email) = v_login OR phone = v_login)
+      AND password = v_pass
+    LIMIT 1;
+  END IF;
+
   IF FOUND THEN
+    DELETE FROM public.login_attempts WHERE login = v_login;
     RETURN to_jsonb(v_student);
   END IF;
 
-  -- Check Class 12
-  SELECT id, name, email, phone, subject, 'Class 12' AS student_class
-  INTO v_student
-  FROM public.class_12_students
-  WHERE (lower(email) = v_clean_login OR phone = v_clean_login)
-    AND password = v_clean_pass
-  LIMIT 1;
-
-  IF FOUND THEN
-    RETURN to_jsonb(v_student);
-  END IF;
-
+  INSERT INTO public.login_attempts AS la (login, fails, updated_at)
+  VALUES (v_login, 1, now())
+  ON CONFLICT (login) DO UPDATE
+    SET fails        = CASE WHEN la.locked_until IS NOT NULL AND la.locked_until <= now() THEN 1 ELSE la.fails + 1 END,
+        locked_until = CASE
+                         WHEN (CASE WHEN la.locked_until IS NOT NULL AND la.locked_until <= now() THEN 1 ELSE la.fails + 1 END) >= 10
+                         THEN now() + interval '5 minutes'
+                         ELSE NULL
+                       END,
+        updated_at   = now();
   RETURN NULL;
 END;
 $$;
 
--- 4. Lookup Student by Email or Phone -----------------------------------------
+-- 4. Lookup Student by Email or Phone (refreshes class/subject; never returns the password) ------
 CREATE OR REPLACE FUNCTION public.get_student_by_email(p_identifier TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -106,6 +140,9 @@ DECLARE
   v_clean TEXT;
 BEGIN
   v_clean := lower(trim(p_identifier));
+  IF position('@' in v_clean) = 0 THEN
+    v_clean := regexp_replace(v_clean, '[\s-]', '', 'g');
+  END IF;
 
   -- Check Class 11
   SELECT id, name, email, phone, subject, 'Class 11' AS student_class

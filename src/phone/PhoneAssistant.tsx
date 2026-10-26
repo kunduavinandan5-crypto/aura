@@ -28,6 +28,7 @@ import { Message, UserProfile } from '@/types';
 import { mergeTranscripts, cleanDuplicatePhrases } from '@/lib/utils';
 import { submitMessageFeedback, getSavedFeedbackRatings, saveFeedbackRating } from '@/lib/supabase';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -778,7 +779,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
                     )}
 
                     <div className="prose-chat break-words text-xs sm:text-sm">
-                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                     </div>
                     {!isUser && <AnswerExtras message={m} />}
 

@@ -6,8 +6,8 @@ import { useDevice } from './hooks/useDevice';
 import { UserProfile } from './types';
 import { storage } from './lib/storage';
 import {
-  fetchStudentByEmailOrPhone,
   fetchUserProfile,
+  lookupStudent,
   isSupabaseConfigured,
   signInWithPassword,
   signOutRemote,
@@ -29,6 +29,9 @@ const Splash: React.FC = () => (
   </div>
 );
 
+/** Class-table students are re-verified at most this often (class/subject changes and removals show up within it). */
+const STUDENT_RECHECK_MS = 6 * 60 * 60 * 1000;
+
 export const App: React.FC = () => {
   const { isMobileOrTablet } = useDevice();
   const [user, setUser] = useState<UserProfile | null>(() => storage.getUser());
@@ -42,14 +45,33 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
+    let hydratedAuthId: string | null = null;
 
     const hydrate = async (authUser: Parameters<typeof userToProfile>[0] | null) => {
       if (!authUser) {
         // If no active Supabase Auth session, check if student was logged in from class tables
         const localUser = storage.getUser();
         if (localUser && localUser.studentClass && !localUser.isGuest) {
-          const fresh = await fetchStudentByEmailOrPhone(localUser.email);
-          if (fresh && !cancelled) {
+          // Launch straight into the app; re-check the student record only occasionally (not on every open).
+          if (storage.studentCheckedRecently(STUDENT_RECHECK_MS)) {
+            if (!cancelled) {
+              setUser(localUser);
+              setAuthReady(true);
+            }
+            return;
+          }
+          const res = await lookupStudent(localUser.email);
+          if (cancelled) return;
+          if (res.status === 'missing') {
+            // The admin removed this student: end the session instead of keeping them signed in forever.
+            storage.wipeLocal();
+            setUser(null);
+            setAuthReady(true);
+            toast.error('This account is no longer active. Please contact your teacher.');
+            return;
+          }
+          if (res.status === 'found') {
+            const fresh = res.student;
             const updated: UserProfile = {
               ...localUser,
               name: fresh.name || localUser.name,
@@ -57,14 +79,13 @@ export const App: React.FC = () => {
               subject: fresh.subject || localUser.subject,
             };
             storage.saveUser(updated);
+            storage.markStudentChecked();
             setUser(updated);
-            setAuthReady(true);
-            return;
-          } else if (!cancelled) {
-            setUser(localUser);
-            setAuthReady(true);
-            return;
+          } else {
+            setUser(localUser); // could not check (offline): keep them in, retry next launch
           }
+          setAuthReady(true);
+          return;
         }
         if (!cancelled) {
           setUser(null);
@@ -73,6 +94,7 @@ export const App: React.FC = () => {
         return;
       }
 
+      hydratedAuthId = authUser.id;
       const row = await fetchUserProfile(authUser.id, authUser.email);
       const profile = userToProfile(authUser, row);
       if (!row) await syncUserProfile(profile);
@@ -89,6 +111,8 @@ export const App: React.FC = () => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // Defer: never await Supabase calls inside this callback (can deadlock the auth client).
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        // supabase-js re-emits SIGNED_IN whenever the tab regains focus; don't re-download everything each time.
+        if (event === 'SIGNED_IN' && session?.user.id && session.user.id === hydratedAuthId) return;
         setTimeout(() => hydrate(session?.user ?? null), 0);
       }
       if (event === 'SIGNED_OUT') {
@@ -115,6 +139,7 @@ export const App: React.FC = () => {
     if (result.status === 'ok') {
       if (result.profile) {
         storage.saveUser(result.profile);
+        storage.markStudentChecked();
         setUser(result.profile);
         if (result.profile.subject) {
           saveSubjectId(result.profile.subject);

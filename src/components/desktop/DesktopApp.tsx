@@ -34,6 +34,7 @@ import { useChat } from '@/hooks/useChat';
 import { SubjectSelect } from '../SubjectSelect';
 import { submitMessageFeedback, getSavedFeedbackRatings, saveFeedbackRating } from '@/lib/supabase';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -965,7 +966,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
                       )}
 
                       <div className="prose-chat break-words text-sm">
-                        <ReactMarkdown>{m.content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                       </div>
                       {!isUser && <AnswerExtras message={m} />}
 

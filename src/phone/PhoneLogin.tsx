@@ -30,7 +30,7 @@ export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin }) => {
       setLockMs(lockRemainingMs());
       toast.error('Too many failed attempts. Login is locked for 5 minutes.');
     } else {
-      toast.error(`Invalid user ID or password. ${left} attempt${left === 1 ? '' : 's'} left before a 30-minute lock.`);
+      toast.error(`Invalid user ID or password. ${left} attempt${left === 1 ? '' : 's'} left before a 5-minute lock.`);
     }
   };
 

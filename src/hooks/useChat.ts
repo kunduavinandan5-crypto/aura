@@ -62,7 +62,7 @@ export function useChat(user: UserProfile) {
     storage.saveThreads(threads, user.id);
   }, [threads, user.id]);
 
-  /* Pull chats changed on other devices (same account) when the app regains focus and every 30s while visible. */
+  /* Pull chats changed on other devices (same account) when the app regains focus and every 2 min while visible. */
   useEffect(() => {
     let running = false;
     const signature = (list: Thread[]) =>
@@ -84,7 +84,7 @@ export function useChat(user: UserProfile) {
         running = false;
       }
     };
-    const timer = setInterval(refresh, 30000);
+    const timer = setInterval(refresh, 120000);
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('focus', refresh);
     window.addEventListener('online', refresh);
@@ -181,6 +181,7 @@ export function useChat(user: UserProfile) {
         };
         patchThread(targetId, (t) => ({
           ...t,
+          updatedAt: assistantMessage.createdAt, // lets other devices notice the new reply
           messages: [...t.messages.filter((m) => m.id !== assistantId), assistantMessage],
         }));
         return result.content;
@@ -198,6 +199,7 @@ export function useChat(user: UserProfile) {
         };
         patchThread(targetId, (t) => ({
           ...t,
+          updatedAt: fallbackMessage.createdAt,
           messages: [...t.messages.filter((m) => m.id !== assistantId), fallbackMessage],
         }));
         return null;

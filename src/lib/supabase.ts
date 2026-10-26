@@ -35,186 +35,67 @@ export interface StudentRecord {
   studentClass: 'Class 11' | 'Class 12';
 }
 
-/**
- * Looks up student details in class_11_students and class_12_students tables.
- * Returns studentClass ('Class 11' | 'Class 12'), subject, name, etc.
- */
-export async function fetchStudentByEmailOrPhone(identifier: string): Promise<StudentRecord | null> {
-  if (!supabase || !identifier?.trim()) return null;
+export type StudentLookup =
+  | { status: 'found'; student: StudentRecord }
+  | { status: 'missing' }
+  | { status: 'error' };
+
+/** Phones lose spaces/dashes; emails are only trimmed and lower-cased. */
+function normalizeLogin(identifier: string): string {
   const clean = identifier.trim().toLowerCase();
-  const cleanPhone = clean.replace(/\s+/g, '');
+  return clean.includes('@') ? clean : clean.replace(/[\s-]/g, '');
+}
 
-  // 1. Try RPC function first (handles SECURITY DEFINER permissions cleanly)
-  try {
-    let { data: rpcData, error: rpcErr } = await supabase.rpc('get_student_by_email', {
-      p_identifier: clean,
-    });
-    if ((rpcErr || !rpcData) && cleanPhone !== clean) {
-      const retry = await supabase.rpc('get_student_by_email', { p_identifier: cleanPhone });
-      if (!retry.error && retry.data) {
-        rpcData = retry.data;
-        rpcErr = null;
-      }
-    }
-    if (!rpcErr && rpcData) {
-      return {
-        id: rpcData.id,
-        name: rpcData.name,
-        email: rpcData.email || clean,
-        phone: rpcData.phone,
-        subject: rpcData.subject,
-        studentClass: rpcData.student_class || (rpcData.class === 12 ? 'Class 12' : 'Class 11'),
-      };
-    }
-  } catch (_) {}
-
-  // 2. Direct query on class_11_students
-  try {
-    const filter = cleanPhone !== clean 
-      ? `email.ilike.${clean},phone.eq.${clean},phone.eq.${cleanPhone}`
-      : `email.ilike.${clean},phone.eq.${clean}`;
-    const { data: c11 } = await supabase
-      .from('class_11_students')
-      .select('id, name, email, phone, subject')
-      .or(filter)
-      .maybeSingle();
-
-    if (c11) {
-      return {
-        id: c11.id,
-        name: c11.name,
-        email: c11.email || clean,
-        phone: c11.phone,
-        subject: c11.subject,
-        studentClass: 'Class 11',
-      };
-    }
-  } catch (_) {}
-
-  // 3. Direct query on class_12_students
-  try {
-    const filter = cleanPhone !== clean 
-      ? `email.ilike.${clean},phone.eq.${clean},phone.eq.${cleanPhone}`
-      : `email.ilike.${clean},phone.eq.${clean}`;
-    const { data: c12 } = await supabase
-      .from('class_12_students')
-      .select('id, name, email, phone, subject')
-      .or(filter)
-      .maybeSingle();
-
-    if (c12) {
-      return {
-        id: c12.id,
-        name: c12.name,
-        email: c12.email || clean,
-        phone: c12.phone,
-        subject: c12.subject,
-        studentClass: 'Class 12',
-      };
-    }
-  } catch (_) {}
-
-  return null;
+function rowToStudent(row: any, fallbackEmail: string): StudentRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email || fallbackEmail,
+    phone: row.phone,
+    subject: row.subject,
+    studentClass: row.student_class || (row.class === 12 ? 'Class 12' : 'Class 11'),
+  };
 }
 
 /**
- * Authenticates a student against class_11_students and class_12_students tables.
- * Admin enters email/phone and password directly into these tables.
+ * Looks up a student in class_11_students / class_12_students through the SECURITY DEFINER RPC
+ * (the tables themselves are not readable by the browser). 'error' means "could not check",
+ * so callers must not treat it as "student removed".
+ */
+export async function lookupStudent(identifier: string): Promise<StudentLookup> {
+  if (!supabase || !identifier?.trim()) return { status: 'error' };
+  const clean = normalizeLogin(identifier);
+  try {
+    const { data, error } = await supabase.rpc('get_student_by_email', { p_identifier: clean });
+    if (error) return { status: 'error' };
+    return data ? { status: 'found', student: rowToStudent(data, clean) } : { status: 'missing' };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+export async function fetchStudentByEmailOrPhone(identifier: string): Promise<StudentRecord | null> {
+  const res = await lookupStudent(identifier);
+  return res.status === 'found' ? res.student : null;
+}
+
+/**
+ * Authenticates a student against class_11_students / class_12_students with ONE server-side call.
+ * The RPC also throttles repeated failures (error message 'too_many_attempts').
  */
 export async function authenticateStudentFromClassTables(
   loginId: string,
   password: string
 ): Promise<{ student: StudentRecord | null; error?: string }> {
   if (!supabase || !loginId?.trim() || !password) return { student: null };
-  const cleanLogin = loginId.trim().toLowerCase();
-  const cleanPhone = cleanLogin.replace(/\s+/g, '');
-  const cleanPass = password.trim();
-
-  // 1. Try secure RPC function if created in Supabase
+  const login = normalizeLogin(loginId);
   try {
-    let { data: rpcData, error: rpcErr } = await supabase.rpc('login_student', {
-      p_login: cleanLogin,
-      p_password: cleanPass,
-    });
-    if ((rpcErr || !rpcData) && cleanPhone !== cleanLogin) {
-      const retry = await supabase.rpc('login_student', {
-        p_login: cleanPhone,
-        p_password: cleanPass,
-      });
-      if (!retry.error && retry.data) {
-        rpcData = retry.data;
-        rpcErr = null;
-      }
-    }
-    if (!rpcErr && rpcData) {
-      return {
-        student: {
-          id: rpcData.id,
-          name: rpcData.name,
-          email: rpcData.email || cleanLogin,
-          phone: rpcData.phone,
-          subject: rpcData.subject,
-          studentClass: rpcData.student_class || (rpcData.class === 12 ? 'Class 12' : 'Class 11'),
-        },
-      };
-    }
-  } catch (_) {}
-
-  const filter = cleanPhone !== cleanLogin
-    ? `email.ilike.${cleanLogin},phone.eq.${cleanLogin},phone.eq.${cleanPhone}`
-    : `email.ilike.${cleanLogin},phone.eq.${cleanLogin}`;
-
-  // 2. Direct query on class_11_students
-  try {
-    const { data: c11, error: e11 } = await supabase
-      .from('class_11_students')
-      .select('id, name, email, phone, subject, password')
-      .or(filter)
-      .eq('password', cleanPass)
-      .maybeSingle();
-
-    if (!e11 && c11) {
-      return {
-        student: {
-          id: c11.id,
-          name: c11.name,
-          email: c11.email || cleanLogin,
-          phone: c11.phone,
-          subject: c11.subject,
-          studentClass: 'Class 11',
-        },
-      };
-    }
+    const { data, error } = await supabase.rpc('login_student', { p_login: login, p_password: password.trim() });
+    if (error) return { student: null, error: error.message };
+    return { student: data ? rowToStudent(data, login) : null };
   } catch (e: any) {
-    console.warn('Class 11 table login query:', e);
+    return { student: null, error: e?.message || 'Network error' };
   }
-
-  // 3. Direct query on class_12_students
-  try {
-    const { data: c12, error: e12 } = await supabase
-      .from('class_12_students')
-      .select('id, name, email, phone, subject, password')
-      .or(filter)
-      .eq('password', cleanPass)
-      .maybeSingle();
-
-    if (!e12 && c12) {
-      return {
-        student: {
-          id: c12.id,
-          name: c12.name,
-          email: c12.email || cleanLogin,
-          phone: c12.phone,
-          subject: c12.subject,
-          studentClass: 'Class 12',
-        },
-      };
-    }
-  } catch (e: any) {
-    console.warn('Class 12 table login query:', e);
-  }
-
-  return { student: null };
 }
 
 export function userToProfile(user: User, row?: Partial<UserProfile> | null): UserProfile {
@@ -246,8 +127,17 @@ export async function signInWithPassword(userId: string, password: string): Prom
   const cleanUser = userId.trim();
   const cleanPass = password.trim();
 
-  // 1. Check class_11_students and class_12_students tables first
+  // 1. Check class_11_students and class_12_students tables first (single RPC call)
   const { student, error: studentErr } = await authenticateStudentFromClassTables(cleanUser, cleanPass);
+  if (studentErr) {
+    if (/too_many_attempts/i.test(studentErr)) {
+      return { status: 'error', message: 'Too many failed attempts. Please wait a few minutes and try again.' };
+    }
+    // RPC unreachable (offline / not deployed): only an email could still match a Supabase Auth account.
+    if (!cleanUser.includes('@')) {
+      return { status: 'error', message: 'Could not reach the sign-in service. Please check your connection and try again.' };
+    }
+  }
   if (student) {
     const profile: UserProfile = {
       id: student.id,
@@ -260,7 +150,8 @@ export async function signInWithPassword(userId: string, password: string): Prom
     return { status: 'ok', profile };
   }
 
-  // 2. Fallback to Supabase Auth (if created in Auth > Users)
+  // 2. Fallback to Supabase Auth (if created in Auth > Users). Auth ids are emails, so skip it for phone logins.
+  if (!cleanUser.includes('@')) return { status: 'invalid' };
   const { data: authData, error } = await supabase.auth.signInWithPassword({
     email: cleanUser,
     password: cleanPass,
@@ -275,10 +166,6 @@ export async function signInWithPassword(userId: string, password: string): Prom
       name: studentInfo?.name,
     });
     return { status: 'ok', profile };
-  }
-
-  if (studentErr) {
-    console.warn('Student login error:', studentErr);
   }
 
   // Wrong id and wrong password are deliberately indistinguishable.
@@ -398,11 +285,21 @@ export async function fetchUserProfile(userId: string, emailHint?: string): Prom
   return profileData;
 }
 
+/**
+ * True only when a real Supabase Auth session for this user exists. Students who sign in through the
+ * class tables have no session, so RLS would reject every cloud read/write; skip those calls entirely.
+ */
+async function hasCloudSession(userId: string): Promise<boolean> {
+  if (!supabase || !userId) return false;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id === userId;
+}
+
 /* ─────────────────────────── Searches ─────────────────────────── */
 
 export async function recordUserSearch(userId: string, searchQuery: string, category = 'General'): Promise<boolean> {
-  if (!supabase || !userId || !searchQuery.trim()) return false;
-  const { error } = await supabase.from('user_searches').insert({
+  if (!searchQuery.trim() || !(await hasCloudSession(userId))) return false;
+  const { error } = await supabase!.from('user_searches').insert({
     id: newId('search'),
     user_id: userId,
     search_query: searchQuery.trim().slice(0, 2000),
@@ -412,8 +309,8 @@ export async function recordUserSearch(userId: string, searchQuery: string, cate
 }
 
 export async function fetchUserSearches(userId: string): Promise<UserSearchRecord[]> {
-  if (!supabase || !userId) return [];
-  const { data, error } = await supabase
+  if (!(await hasCloudSession(userId))) return [];
+  const { data, error } = await supabase!
     .from('user_searches')
     .select('*')
     .eq('user_id', userId)
@@ -431,12 +328,11 @@ export async function fetchUserSearches(userId: string): Promise<UserSearchRecor
 
 /* ─────────────────────────── Threads ─────────────────────────── */
 
+/** Upserts the given conversations. Callers pass only the ones that changed since their last push. */
 export async function syncThreads(threads: Thread[], userId: string): Promise<boolean> {
-  if (!supabase || !threads.length || !userId) return false;
-  const { data } = await supabase.auth.getSession();
-  if (!data.session || data.session.user.id !== userId) return false;
+  if (!threads.length || !(await hasCloudSession(userId))) return false;
 
-  const { error: threadErr } = await supabase.from('threads').upsert(
+  const { error: threadErr } = await supabase!.from('threads').upsert(
     threads.map((t) => ({
       id: t.id,
       user_id: userId,
@@ -463,8 +359,9 @@ export async function syncThreads(threads: Thread[], userId: string): Promise<bo
       created_at: m.createdAt,
     }))
   );
-  if (rows.length) {
-    const { error: msgErr } = await supabase.from('messages').upsert(rows, { onConflict: 'id' });
+  // Chunked so a long history is never one huge request.
+  for (let i = 0; i < rows.length; i += 200) {
+    const { error: msgErr } = await supabase!.from('messages').upsert(rows.slice(i, i + 200), { onConflict: 'id' });
     if (msgErr) {
       console.warn('Supabase syncThreads (messages) error:', msgErr.message);
       return false;
@@ -473,32 +370,51 @@ export async function syncThreads(threads: Thread[], userId: string): Promise<bo
   return true;
 }
 
-export async function fetchRemoteThreads(userId: string): Promise<Thread[] | null> {
-  if (!supabase || !userId) return null;
-  const { data: threadsData, error } = await supabase
+const PAGE = 1000; // PostgREST returns at most 1000 rows per request
+
+/**
+ * Lists the user's conversations. Messages are downloaded only for conversations that are new or newer
+ * than the local copy; unchanged ones reuse the local messages, so a refresh is one small query.
+ * Resolves null when there is no cloud session or the request failed.
+ */
+export async function fetchRemoteThreads(userId: string, local: Thread[] = []): Promise<Thread[] | null> {
+  if (!(await hasCloudSession(userId))) return null;
+  const { data: threadsData, error } = await supabase!
     .from('threads')
-    .select('*')
+    .select('id,title,is_pinned,created_at,updated_at')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
   if (error || !threadsData) return null;
-  if (!threadsData.length) return [];
 
-  const { data: messagesData } = await supabase
-    .from('messages')
-    .select('*')
-    .in('thread_id', threadsData.map((t) => t.id))
-    .order('created_at', { ascending: true });
+  const localById = new Map(local.map((t) => [t.id, t]));
+  const stale = threadsData.filter((t) => {
+    const l = localById.get(t.id);
+    return !l || l.updatedAt < t.updated_at;
+  });
 
   const byThread: Record<string, Message[]> = {};
-  for (const m of messagesData ?? []) {
-    (byThread[m.thread_id] ||= []).push({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      createdAt: m.created_at,
-      sources: m.sources ?? undefined,
-      suggestedFollowups: m.suggested_followups ?? undefined,
-    });
+  for (let i = 0; i < stale.length; i += 50) {
+    const ids = stale.slice(i, i + 50).map((t) => t.id);
+    for (let from = 0; ; from += PAGE) {
+      const { data: rows, error: msgErr } = await supabase!
+        .from('messages')
+        .select('id,thread_id,role,content,sources,suggested_followups,created_at')
+        .in('thread_id', ids)
+        .order('created_at', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (msgErr) return null;
+      for (const m of rows ?? []) {
+        (byThread[m.thread_id] ||= []).push({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          createdAt: m.created_at,
+          sources: m.sources ?? undefined,
+          suggestedFollowups: m.suggested_followups ?? undefined,
+        });
+      }
+      if ((rows?.length ?? 0) < PAGE) break;
+    }
   }
 
   return threadsData.map((t) => ({
@@ -507,7 +423,7 @@ export async function fetchRemoteThreads(userId: string): Promise<Thread[] | nul
     createdAt: t.created_at,
     updatedAt: t.updated_at,
     isPinned: t.is_pinned,
-    messages: byThread[t.id] || [],
+    messages: byThread[t.id] ?? localById.get(t.id)?.messages ?? [],
   }));
 }
 
