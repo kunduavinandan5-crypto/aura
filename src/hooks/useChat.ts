@@ -13,7 +13,8 @@ const FALLBACK_REPLY = AI_ERROR_MESSAGE;
 export function useChat(user: UserProfile) {
   const [threads, setThreads] = useState<Thread[]>(() => storage.getThreads());
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  /** Ids of the threads that currently have a reply in flight (each chat generates independently). */
+  const [generatingIds, setGeneratingIds] = useState<string[]>([]);
   const [subjectId, setSubjectIdState] = useState(() => {
     const saved = loadSubjectId();
     if (saved) return saved;
@@ -42,18 +43,20 @@ export function useChat(user: UserProfile) {
   }, [user.subject, subjectId]);
 
   const threadsRef = useRef(threads);
-  const busyRef = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   threadsRef.current = threads;
 
+  const setThreadGenerating = (threadId: string, on: boolean) =>
+    setGeneratingIds((prev) => (on ? (prev.includes(threadId) ? prev : [...prev, threadId]) : prev.filter((id) => id !== threadId)));
+
   const cancelGeneration = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    busyRef.current = false;
-    setIsGenerating(false);
-  }, []);
+    if (!activeThreadId) return;
+    abortControllersRef.current.get(activeThreadId)?.abort();
+    abortControllersRef.current.delete(activeThreadId);
+    setThreadGenerating(activeThreadId, false);
+  }, [activeThreadId]);
+
+  const isGenerating = activeThreadId !== null && generatingIds.includes(activeThreadId);
 
   useEffect(() => {
     storage.saveThreads(threads, user.id);
@@ -86,7 +89,7 @@ export function useChat(user: UserProfile) {
   const sendMessage = useCallback(
     async (text: string, images?: string[]): Promise<string | null> => {
       const prompt = text.trim() || (images?.length ? `Please analyze and explain ${images.length > 1 ? 'these photos' : 'this photo'}.` : '');
-      if (!prompt || busyRef.current) return null;
+      if (!prompt || (activeThreadId && abortControllersRef.current.has(activeThreadId))) return null;
 
       // Clear any prior toasts (e.g. "Photo attached") so toasts never stack or overlap
       toast.dismiss();
@@ -96,7 +99,6 @@ export function useChat(user: UserProfile) {
         toast.error('Please select a subject before asking a question.');
         return null;
       }
-      busyRef.current = true;
 
       storage.recordSearch(prompt, user.id, subject.label);
 
@@ -124,8 +126,8 @@ export function useChat(user: UserProfile) {
 
       const targetId = threadId;
       const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-      setIsGenerating(true);
+      abortControllersRef.current.set(targetId, abortController);
+      setThreadGenerating(targetId, true);
       try {
         const result = await generateAiResponse({
           prompt,
@@ -166,9 +168,11 @@ export function useChat(user: UserProfile) {
         }));
         return null;
       } finally {
-        busyRef.current = false;
-        abortControllerRef.current = null;
-        setIsGenerating(false);
+        // Only clear our own slot; a cancel + resend may have installed a newer controller
+        if (abortControllersRef.current.get(targetId) === abortController) {
+          abortControllersRef.current.delete(targetId);
+          setThreadGenerating(targetId, false);
+        }
       }
     },
     [activeThreadId, user.id, user.studentClass, subjectId]
