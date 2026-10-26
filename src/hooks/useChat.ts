@@ -44,6 +44,8 @@ export function useChat(user: UserProfile) {
 
   const threadsRef = useRef(threads);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  /** Last accepted send, to drop an accidental double tap (a new chat has no thread id to guard on yet). */
+  const lastSendRef = useRef({ key: '', prompt: '', at: 0 });
   threadsRef.current = threads;
 
   const setThreadGenerating = (threadId: string, on: boolean) =>
@@ -124,6 +126,10 @@ export function useChat(user: UserProfile) {
     async (text: string, images?: string[]): Promise<string | null> => {
       const prompt = text.trim() || (images?.length ? `Please analyze and explain ${images.length > 1 ? 'these photos' : 'this photo'}.` : '');
       if (!prompt || (activeThreadId && abortControllersRef.current.has(activeThreadId))) return null;
+      const sendKey = activeThreadId ?? '__new__';
+      const last = lastSendRef.current;
+      if (last.key === sendKey && last.prompt === prompt && Date.now() - last.at < 2000) return null;
+      lastSendRef.current = { key: sendKey, prompt, at: Date.now() };
 
       // Clear any prior toasts (e.g. "Photo attached") so toasts never stack or overlap
       toast.dismiss();

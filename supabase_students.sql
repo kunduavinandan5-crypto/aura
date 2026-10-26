@@ -100,16 +100,16 @@ BEGIN
   SELECT id, name, email, phone, subject, 'Class 11' AS student_class
   INTO v_student
   FROM public.class_11_students
-  WHERE (lower(email) = v_login OR phone = v_login)
-    AND password = v_pass
+  WHERE (lower(btrim(email)) = v_login OR btrim(phone) = v_login)
+    AND btrim(password, E' \t\r\n') = v_pass
   LIMIT 1;
 
   IF NOT FOUND THEN
     SELECT id, name, email, phone, subject, 'Class 12' AS student_class
     INTO v_student
     FROM public.class_12_students
-    WHERE (lower(email) = v_login OR phone = v_login)
-      AND password = v_pass
+    WHERE (lower(btrim(email)) = v_login OR btrim(phone) = v_login)
+      AND btrim(password, E' \t\r\n') = v_pass
     LIMIT 1;
   END IF;
 
@@ -152,7 +152,7 @@ BEGIN
   SELECT id, name, email, phone, subject, 'Class 11' AS student_class
   INTO v_student
   FROM public.class_11_students
-  WHERE lower(email) = v_clean OR phone = v_clean
+  WHERE lower(btrim(email)) = v_clean OR btrim(phone) = v_clean
   LIMIT 1;
 
   IF FOUND THEN
@@ -163,7 +163,7 @@ BEGIN
   SELECT id, name, email, phone, subject, 'Class 12' AS student_class
   INTO v_student
   FROM public.class_12_students
-  WHERE lower(email) = v_clean OR phone = v_clean
+  WHERE lower(btrim(email)) = v_clean OR btrim(phone) = v_clean
   LIMIT 1;
 
   IF FOUND THEN

@@ -25,7 +25,7 @@ import { MAX_IMAGES, openImageInNewTab, readImageFiles } from '@/lib/attachments
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { Message, UserProfile } from '@/types';
-import { mergeTranscripts, cleanDuplicatePhrases } from '@/lib/utils';
+import { useSpeechInput } from '@/hooks/useSpeechInput';
 import { submitMessageFeedback, getSavedFeedbackRatings, saveFeedbackRating } from '@/lib/supabase';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -90,32 +90,21 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
   const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 'positive' | 'negative'>>(() => getSavedFeedbackRatings());
   const [feedbackModalTarget, setFeedbackModalTarget] = useState<{ messageId: string; snippet: string } | null>(null);
 
-  /* ── Inline voice state ── */
-  const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [voiceTranscript, setVoiceTranscript] = useState('');
-  const recognitionRef = useRef<any>(null);
-  const isVoiceActiveRef = useRef(false);
-  const accumulatedTranscriptRef = useRef('');
-  const restartTimeoutRef = useRef<any>(null);
+  /* ── Inline voice input (see useSpeechInput) ── */
+  const {
+    isActive: isVoiceActive,
+    isListening,
+    transcript: voiceTranscript,
+    start: startVoice,
+    pause: pauseVoice,
+    cancel: stopVoice,
+    finish: finishVoice,
+  } = useSpeechInput();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    return () => {
-      isVoiceActiveRef.current = false;
-      if (restartTimeoutRef.current) {
-        clearTimeout(restartTimeoutRef.current);
-        restartTimeoutRef.current = null;
-      }
-      try {
-        recognitionRef.current?.abort();
-      } catch (_) { }
-    };
-  }, []);
 
   // Auto-scroll inside the chat container only
   useEffect(() => {
@@ -144,153 +133,10 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
     { dependencies: [messages.length], scope: containerRef }
   );
 
-  /* ─── Start inline speech recognition (Continuous recording until user stops) ─── */
-  const startVoice = useCallback(() => {
-    setIsVoiceActive(true);
-    isVoiceActiveRef.current = true;
-    setVoiceTranscript('');
-    accumulatedTranscriptRef.current = '';
-
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      toast.error('Voice input is not supported in this browser. Please type your question.');
-      setIsVoiceActive(false);
-      isVoiceActiveRef.current = false;
-      return;
-    }
-
-    const initRecognitionSession = () => {
-      if (!isVoiceActiveRef.current) return;
-
-      try {
-        if (recognitionRef.current) {
-          try {
-            recognitionRef.current.abort();
-          } catch (_) { }
-          recognitionRef.current = null;
-        }
-
-        const recognition = new SR();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-        recognition.maxAlternatives = 1;
-
-        let sessionFinalChunk = '';
-
-        recognition.onstart = () => {
-          if (isVoiceActiveRef.current) {
-            setIsListening(true);
-          }
-        };
-
-        recognition.onresult = (e: any) => {
-          if (!isVoiceActiveRef.current) return;
-          let currentFinal = '';
-          let currentInterim = '';
-
-          for (let i = 0; i < e.results.length; i++) {
-            const res = e.results[i];
-            if (res.isFinal) {
-              currentFinal += res[0].transcript + ' ';
-            } else {
-              currentInterim += res[0].transcript;
-            }
-          }
-
-          sessionFinalChunk = currentFinal;
-          const sessionText = `${currentFinal} ${currentInterim}`.trim();
-          const merged = mergeTranscripts(accumulatedTranscriptRef.current, sessionText);
-
-          if (merged) {
-            setVoiceTranscript(merged);
-          }
-        };
-
-        recognition.onerror = (event: any) => {
-          // 'no-speech' or 'aborted' are standard non-fatal events during pauses on mobile
-          if (event.error !== 'no-speech' && event.error !== 'aborted') {
-            console.warn('Speech recognition notice:', event.error);
-          }
-        };
-
-        recognition.onend = () => {
-          if (sessionFinalChunk) {
-            accumulatedTranscriptRef.current = mergeTranscripts(
-              accumulatedTranscriptRef.current,
-              sessionFinalChunk
-            );
-            sessionFinalChunk = '';
-          }
-
-          if (isVoiceActiveRef.current) {
-            if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
-            restartTimeoutRef.current = setTimeout(() => {
-              if (isVoiceActiveRef.current) {
-                initRecognitionSession();
-              }
-            }, 120);
-          } else {
-            setIsListening(false);
-          }
-        };
-
-        recognitionRef.current = recognition;
-        recognition.start();
-      } catch (err) {
-        console.warn('Speech recognition start notice:', err);
-        if (isVoiceActiveRef.current) {
-          if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
-          restartTimeoutRef.current = setTimeout(() => {
-            if (isVoiceActiveRef.current) initRecognitionSession();
-          }, 250);
-        } else {
-          setIsListening(false);
-        }
-      }
-    };
-
-    initRecognitionSession();
-  }, []);
-
-  const stopVoice = useCallback(() => {
-    isVoiceActiveRef.current = false;
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
-    try {
-      recognitionRef.current?.abort();
-    } catch { }
-    recognitionRef.current = null;
-    setIsListening(false);
-    setIsVoiceActive(false);
-    setVoiceTranscript('');
-    accumulatedTranscriptRef.current = '';
-  }, []);
-
   const sendVoice = useCallback(() => {
-    isVoiceActiveRef.current = false;
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
-    try {
-      recognitionRef.current?.abort();
-    } catch { }
-    recognitionRef.current = null;
-    setIsListening(false);
-    setIsVoiceActive(false);
-
-    const textToSend = cleanDuplicatePhrases(
-      voiceTranscript.trim() || accumulatedTranscriptRef.current.trim()
-    );
-    if (textToSend) {
-      onSendMessage(textToSend);
-    }
-    setVoiceTranscript('');
-    accumulatedTranscriptRef.current = '';
-  }, [voiceTranscript, onSendMessage]);
+    const text = finishVoice();
+    if (text) onSendMessage(text);
+  }, [finishVoice, onSendMessage]);
 
   const handleSend = () => {
     if ((!input.trim() && attachedImages.length === 0) || isGenerating) return;
@@ -498,7 +344,7 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
           </div>
 
           <button
-            onClick={stopVoice}
+            onClick={pauseVoice}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-all active:scale-90 hover:bg-white/15"
             title="Stop recording"
           >
