@@ -23,7 +23,7 @@
 CREATE TABLE IF NOT EXISTS public.class_11_students (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name       TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 120),
-  phone      TEXT NOT NULL UNIQUE CHECK (phone ~ '^\+?[0-9]{7,15}$'),
+  phone      TEXT UNIQUE CHECK (phone IS NULL OR phone ~ '^\+?[0-9]{7,15}$'),
   subject    TEXT NOT NULL CHECK (char_length(subject) BETWEEN 1 AND 80),
   email      TEXT UNIQUE CHECK (email IS NULL OR char_length(email) <= 320),
   password   TEXT,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.class_11_students (
 CREATE TABLE IF NOT EXISTS public.class_12_students (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name       TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 120),
-  phone      TEXT NOT NULL UNIQUE CHECK (phone ~ '^\+?[0-9]{7,15}$'),
+  phone      TEXT UNIQUE CHECK (phone IS NULL OR phone ~ '^\+?[0-9]{7,15}$'),
   subject    TEXT NOT NULL CHECK (char_length(subject) BETWEEN 1 AND 80),
   email      TEXT UNIQUE CHECK (email IS NULL OR char_length(email) <= 320),
   password   TEXT,
@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS public.class_12_students (
 -- 2. Add password column if missing (safe if already added) -------------------
 ALTER TABLE public.class_11_students ADD COLUMN IF NOT EXISTS password TEXT;
 ALTER TABLE public.class_12_students ADD COLUMN IF NOT EXISTS password TEXT;
+
+-- Phone is optional (a student can log in with just an email). Safe on existing tables.
+ALTER TABLE public.class_11_students ALTER COLUMN phone DROP NOT NULL;
+ALTER TABLE public.class_12_students ALTER COLUMN phone DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_class_11_students_email ON public.class_11_students (lower(email));
 CREATE INDEX IF NOT EXISTS idx_class_12_students_email ON public.class_12_students (lower(email));

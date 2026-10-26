@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, GraduationCap, Lock, User } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, GraduationCap, Lock, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatRemaining, lockRemainingMs, recordFailure, resetAttempts } from '@/lib/loginLimiter';
 
@@ -13,6 +13,7 @@ interface PhoneLoginProps {
 export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin }) => {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lockMs, setLockMs] = useState(() => lockRemainingMs());
   const locked = lockMs > 0;
@@ -116,15 +117,26 @@ export const PhoneLogin: React.FC<PhoneLoginProps> = ({ onLogin }) => {
             <Lock className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
               id="login-password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               autoComplete="current-password"
+              autoCapitalize="none"
+              spellCheck={false}
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={locked}
-              className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-4 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none disabled:opacity-60"
+              className="w-full rounded-full border border-white/15 bg-white/5 py-3.5 pr-12 pl-11 text-sm text-white placeholder-[#60697e] focus:border-indigo-500 focus:outline-none disabled:opacity-60"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            </button>
           </div>
 
           {lockNotice}
