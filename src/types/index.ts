@@ -18,7 +18,7 @@ export interface Message {
   suggestedFollowups?: string[];
   /** Backend answer id (used for /feedback) and how the answer was produced. */
   answerId?: string;
-  mode?: 'llm' | 'fallback' | 'flagged' | 'no_results' | 'error';
+  mode?: 'llm' | 'fallback' | 'flagged' | 'no_results' | 'no_question' | 'error';
 }
 
 export interface Thread {

@@ -9,6 +9,9 @@ export interface AskBody {
   question: string;
   subject: string;
   student_class?: '11' | '12';
+  /** Raw base64 JPEG/PNG WITHOUT the "data:image/...;base64," prefix. */
+  image_base64?: string;
+  image_media_type?: string;
 }
 
 /** "Class 12" / "12" / 12 -> "12"; "Class 11" -> "11"; anything else (unknown, other course) -> undefined. */
@@ -22,9 +25,18 @@ export function normalizeSubject(subjectId: string): string {
   return subjectId.trim().toLowerCase();
 }
 
-export function buildAskBody(question: string, studentClass: string | number | null | undefined, subjectId: string): AskBody {
+export function buildAskBody(
+  question: string,
+  studentClass: string | number | null | undefined,
+  subjectId: string,
+  image?: { image_base64: string; image_media_type: string }
+): AskBody {
   const body: AskBody = { question, subject: normalizeSubject(subjectId) };
   const cls = normalizeClass(studentClass);
   if (cls) body.student_class = cls;
+  if (image) {
+    body.image_base64 = image.image_base64;
+    body.image_media_type = image.image_media_type;
+  }
   return body;
 }

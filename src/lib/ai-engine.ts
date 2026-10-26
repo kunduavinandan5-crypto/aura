@@ -1,6 +1,6 @@
 import { RagSourceChunk } from '@/types';
 import { Subject } from './subjects';
-import { extractTextFromImages } from './ocr';
+import { toRequestImage } from './attachments';
 import { buildAskBody } from './askBody';
 
 /**
@@ -19,7 +19,7 @@ const customApi = (
 
 const REQUEST_TIMEOUT_MS = 100_000;
 
-export type AnswerMode = 'llm' | 'fallback' | 'flagged' | 'no_results' | 'error';
+export type AnswerMode = 'llm' | 'fallback' | 'flagged' | 'no_results' | 'no_question' | 'error';
 
 export interface AiResult {
   content: string;
@@ -34,9 +34,6 @@ export const AI_ERROR_MESSAGE = 'Sorry, something went wrong. Please try again i
 
 /** An error whose message is meant to be shown to the student as-is (in the chat and in a toast). */
 export class UserFacingError extends Error {}
-
-export const PHOTO_UNREADABLE_MESSAGE =
-  "I couldn't read a question in that photo. Please retake it closer, in good light and with the page flat, or type the question.";
 
 export const GIBBERISH_MESSAGE =
   "I couldn't understand that question. Please type a clear question about your subject, for example: \"What is a partnership deed?\"";
@@ -192,35 +189,28 @@ export async function generateAiResponse(params: {
   subject: Subject;
   /** Optional cancellation signal from user stopping generation. */
   signal?: AbortSignal;
-  /** Attached photos (data URLs). Their text is read on the device and sent as the question. */
+  /** Attached photo (data URL). Sent to the backend with the typed text, which reads the photo. */
   images?: string[];
 }): Promise<AiResult> {
   const { studentClass, subject, signal, images } = params;
-  let prompt = params.prompt.trim();
-  let photoNote = '';
+  const prompt = params.prompt.trim(); // may be empty when a photo is attached
   if (signal?.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  if (images?.length) {
-    // The backend is text-only: read the question out of the photo(s) and append it to anything typed.
-    const scanned = await extractTextFromImages(images, signal);
-    if (!scanned && prompt.length < 15) throw new UserFacingError(PHOTO_UNREADABLE_MESSAGE);
-    if (scanned) {
-      photoNote = `> **Read from your photo:** ${scanned}\n\n`;
-      prompt = [prompt, scanned].filter(Boolean).join(' ');
-    }
-  } else if (looksLikeGibberish(prompt)) {
+  // Resized to <= 1600 px / JPEG 0.8 and sent as raw base64 next to the typed text.
+  const image = images?.length ? await toRequestImage(images[0]) : undefined;
+  if (!image && looksLikeGibberish(prompt)) {
     return { content: GIBBERISH_MESSAGE, followups: [], mode: 'no_results' };
   }
 
   // subject = the dropdown selection (lowercased); class = the student's own class from their account ("Class 12" -> "12").
-  const body = buildAskBody(prompt, studentClass, subject.id);
+  const body = buildAskBody(prompt, studentClass, subject.id, image);
   const cls = body.student_class;
 
   const cacheKey = answerCacheKey(subject.id, cls, prompt);
-  const cached = readCachedAnswer(cacheKey);
-  if (cached) return photoNote ? { ...cached, content: photoNote + cached.content } : cached;
+  const cached = image ? null : readCachedAnswer(cacheKey); // photo questions are never cached
+  if (cached) return cached;
 
   // Same-origin /api/rag proxy first (no CORS), then the direct URLs. They all reach the SAME backend, so
   // we only move on when an endpoint is unreachable (or missing, 404) — never after the backend answered
@@ -267,7 +257,8 @@ export async function generateAiResponse(params: {
   const rawAnswer = typeof data?.answer === 'string' ? data.answer.trim() : '';
   if (!rawAnswer) throw new Error(AI_ERROR_MESSAGE);
 
-  const content = cleanAnswerContent(rawAnswer);
+  // "no_question" / "error" replies are shown exactly as the backend wrote them.
+  const content = data.mode === 'no_question' || data.mode === 'error' ? rawAnswer : cleanAnswerContent(rawAnswer);
 
   const result: AiResult = {
     content,
@@ -276,8 +267,8 @@ export async function generateAiResponse(params: {
     answerId: typeof data.answer_id === 'string' ? data.answer_id : undefined,
     mode: data.mode,
   };
-  if (data.mode === 'llm') writeCachedAnswer(cacheKey, result);
-  return photoNote ? { ...result, content: photoNote + result.content } : result;
+  if (data.mode === 'llm' && !image) writeCachedAnswer(cacheKey, result);
+  return result;
 }
 
 /**

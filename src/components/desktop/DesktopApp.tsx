@@ -24,7 +24,7 @@ import { SettingsModal } from '../settings/SettingsModal';
 import { CameraCaptureModal } from '../camera/CameraCaptureModal';
 import { AnswerExtras, SLOW_HINT, useSlowHint } from '@/components/chat/AnswerExtras';
 import { sendAnswerFeedback } from '@/lib/ai-engine';
-import { MAX_IMAGES, compressImage, openImageInNewTab, readImageFiles } from '@/lib/attachments';
+import { MAX_IMAGES, MAX_IMAGES_MESSAGE, compressImage, openImageInNewTab, readImageFiles } from '@/lib/attachments';
 import { FeedbackModal } from '../feedback/FeedbackModal';
 import { Velaris } from '@/components/ui/velaris';
 import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
@@ -151,7 +151,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
             void compressImage(blob).then((dataUrl) => {
               setAttachedImages((prev) => {
                 if (prev.length >= MAX_IMAGES) {
-                  toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+                  toast.error(MAX_IMAGES_MESSAGE);
                   return prev;
                 }
                 toast.success('Photo pasted from clipboard');
@@ -371,7 +371,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
   const openPicker = () => {
     if (attachedImages.length >= MAX_IMAGES) {
-      toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+      toast.error(MAX_IMAGES_MESSAGE);
       return;
     }
     fileInputRef.current?.click();
@@ -379,7 +379,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
   const openCamera = () => {
     if (attachedImages.length >= MAX_IMAGES) {
-      toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+      toast.error(MAX_IMAGES_MESSAGE);
       return;
     }
     setIsCameraOpen(true);
@@ -1076,7 +1076,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
 
               {isGenerating && (
                 <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 w-fit backdrop-blur-md anim-fade-up">
-                  <span className="text-[11px] text-zinc-400">Thinking...</span>
+                  <span className="text-[11px] text-zinc-400">{messages[messages.length - 1]?.imageUrls?.length ? 'Reading your photo...' : 'Thinking...'}</span>
                   <span className="flex items-center gap-1 text-blue-400">
                     <span className="gemini-typing-dot" />
                     <span className="gemini-typing-dot" />

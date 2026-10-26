@@ -1,6 +1,8 @@
 import { toast } from 'sonner';
 
-export const MAX_IMAGES = 5;
+/** The answer service reads one photo per question. */
+export const MAX_IMAGES = 1;
+export const MAX_IMAGES_MESSAGE = MAX_IMAGES === 1 ? 'You can attach one photo per question' : `You can attach a maximum of ${MAX_IMAGES} photos`;
 
 const readAsDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -10,32 +12,68 @@ const readAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-/** Longest edge and JPEG quality for attached photos: enough resolution for the text on a textbook page to be read (OCR). */
-const MAX_EDGE = 2000;
-const JPEG_QUALITY = 0.85;
+/** Longest side (px) and JPEG quality of every photo that is sent: keeps a request well under ~1.5 MB. */
+const MAX_EDGE = 1600;
+const JPEG_QUALITY = 0.8;
+/** An already-small JPEG is sent untouched (no second lossy re-encode). */
+const KEEP_AS_IS_BYTES = 1_200_000;
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, base64] = dataUrl.split(',');
+  const mime = /data:([^;]+)/.exec(header)?.[1] ?? 'image/jpeg';
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: mime });
+}
 
 /**
- * Downscales and re-encodes a photo as JPEG so a 5-photo question stays small (gallery photos are often 3-5 MB each).
- * Falls back to the original file if the browser can't decode or encode it.
+ * Resizes (longest side <= MAX_EDGE) and re-encodes as JPEG on a canvas. Resolves null when the image is
+ * already a small JPEG within the limit (the caller keeps the original). Throws if the browser can't decode it.
  */
+async function resizeToJpeg(blob: Blob): Promise<string | null> {
+  const bitmap = await createImageBitmap(blob);
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  if (scale === 1 && blob.type === 'image/jpeg' && blob.size <= KEEP_AS_IS_BYTES) {
+    bitmap.close();
+    return null;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('no 2d context');
+  ctx.fillStyle = '#fff'; // JPEG has no transparency
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const out = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+  if (!out.startsWith('data:image/jpeg')) throw new Error('jpeg encoding unsupported');
+  return out;
+}
+
+/** Shrinks a picked photo as soon as it is attached (gallery photos are often 3-5 MB). Falls back to the original file. */
 export async function compressImage(file: File): Promise<string> {
   try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('no 2d context');
-    ctx.fillStyle = '#fff'; // JPEG has no transparency
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    const out = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-    return out.startsWith('data:image/jpeg') ? out : readAsDataUrl(file);
+    return (await resizeToJpeg(file)) ?? (await readAsDataUrl(file));
   } catch {
     return readAsDataUrl(file);
   }
+}
+
+/**
+ * The image part of a /ask request: raw base64 (no "data:...;base64," prefix) plus its media type, resized to
+ * at most MAX_EDGE px and JPEG quality 0.8. Camera frames are shrunk here too.
+ */
+export async function toRequestImage(dataUrl: string): Promise<{ image_base64: string; image_media_type: string }> {
+  let finalUrl = dataUrl;
+  try {
+    finalUrl = (await resizeToJpeg(dataUrlToBlob(dataUrl))) ?? dataUrl;
+  } catch {
+    /* can't re-encode: send the original */
+  }
+  return {
+    image_base64: finalUrl.slice(finalUrl.indexOf(',') + 1),
+    image_media_type: /data:([^;]+)/.exec(finalUrl)?.[1] ?? 'image/jpeg',
+  };
 }
 
 /**
@@ -48,7 +86,7 @@ export async function readImageFiles(files: File[], existingCount: number): Prom
 
   const room = Math.max(0, MAX_IMAGES - existingCount);
   if (images.length > room) {
-    toast.error(`You can attach a maximum of ${MAX_IMAGES} photos`);
+    toast.error(MAX_IMAGES_MESSAGE);
   }
   const accepted = images.slice(0, room);
 
