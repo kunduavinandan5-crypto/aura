@@ -472,7 +472,7 @@ export async function deleteRemoteUserData(userId: string): Promise<boolean> {
 /* ─────────────────────────── Feedback ─────────────────────────── */
 
 /**
- * Submit thumbs up/down user feedback for an AI response to the message_feedback table.
+ * Submit thumbs up/down feedback for an AI response: feedback_positive or feedback_negative (supabase_feedback.sql).
  */
 export async function submitMessageFeedback(feedback: MessageFeedback): Promise<boolean> {
   const id = feedback.id || newId('fb');
@@ -490,9 +490,6 @@ export async function submitMessageFeedback(feedback: MessageFeedback): Promise<
   try {
     // Students who sign in through the class tables have no Supabase Auth account, so identify them by
     // email / student_id (plain text, no foreign key). Positive and negative feedback live in separate tables.
-    const { data: sessionData } = await supabase.auth.getSession();
-    const authId = sessionData.session?.user.id ?? null;
-    const isAuthUser = Boolean(authId && authId === feedback.userId);
     const positive = feedback.rating === 'positive' || feedback.rating === 'thumbs_up';
 
     const base = {
@@ -511,24 +508,6 @@ export async function submitMessageFeedback(feedback: MessageFeedback): Promise<
           .insert({ ...base, reason: feedback.reason || null, comment: feedback.comment ? feedback.comment.slice(0, 2000) : null });
 
     if (error) {
-      // supabase_feedback.sql not run yet (table missing): keep recording in the old table so nothing is lost.
-      if (/PGRST205|42P01|schema cache|does not exist/i.test(`${error.code ?? ''} ${error.message}`)) {
-        const legacy = await supabase.from('message_feedback').insert({
-          id,
-          message_id: feedback.messageId,
-          thread_id: feedback.threadId || null,
-          user_id: isAuthUser ? authId : null,
-          user_email: feedback.userEmail || null,
-          rating: feedback.rating,
-          reason: feedback.reason || null,
-          comment: feedback.comment || null,
-          message_snippet: base.question.slice(0, 1000),
-          subject_id: feedback.subjectId || null,
-        });
-        if (!legacy.error) return true;
-        console.warn('Supabase submitMessageFeedback (legacy) error:', legacy.error.code, legacy.error.message);
-        return false;
-      }
       console.warn('Supabase submitMessageFeedback error:', error.code, error.message);
       return false;
     }

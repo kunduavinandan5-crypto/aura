@@ -72,76 +72,46 @@ ALTER TABLE public.user_searches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.threads       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages      ENABLE ROW LEVEL SECURITY;
 
+-- Policies compare as text so they work whether an older table stored these ids as uuid or text
+-- (CREATE TABLE IF NOT EXISTS never changes a table that already exists).
 DROP POLICY IF EXISTS "profiles: owner full access" ON public.profiles;
 CREATE POLICY "profiles: owner full access" ON public.profiles
   FOR ALL TO authenticated
-  USING (id = (SELECT auth.uid()))
-  WITH CHECK (id = (SELECT auth.uid()));
+  USING (id::text = (SELECT auth.uid())::text)
+  WITH CHECK (id::text = (SELECT auth.uid())::text);
 
 DROP POLICY IF EXISTS "user_searches: owner full access" ON public.user_searches;
 CREATE POLICY "user_searches: owner full access" ON public.user_searches
   FOR ALL TO authenticated
-  USING (user_id = (SELECT auth.uid()))
-  WITH CHECK (user_id = (SELECT auth.uid()));
+  USING (user_id::text = (SELECT auth.uid())::text)
+  WITH CHECK (user_id::text = (SELECT auth.uid())::text);
 
 DROP POLICY IF EXISTS "threads: owner full access" ON public.threads;
 CREATE POLICY "threads: owner full access" ON public.threads
   FOR ALL TO authenticated
-  USING (user_id = (SELECT auth.uid()))
-  WITH CHECK (user_id = (SELECT auth.uid()));
+  USING (user_id::text = (SELECT auth.uid())::text)
+  WITH CHECK (user_id::text = (SELECT auth.uid())::text);
 
 DROP POLICY IF EXISTS "messages: owner full access" ON public.messages;
 CREATE POLICY "messages: owner full access" ON public.messages
   FOR ALL TO authenticated
   USING (EXISTS (
     SELECT 1 FROM public.threads t
-    WHERE t.id = messages.thread_id AND t.user_id = (SELECT auth.uid())
+    WHERE t.id::text = messages.thread_id::text AND t.user_id::text = (SELECT auth.uid())::text
   ))
   WITH CHECK (EXISTS (
     SELECT 1 FROM public.threads t
-    WHERE t.id = messages.thread_id AND t.user_id = (SELECT auth.uid())
+    WHERE t.id::text = messages.thread_id::text AND t.user_id::text = (SELECT auth.uid())::text
   ));
 
--- 8. MESSAGE FEEDBACK ---------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.message_feedback (
-  id              TEXT PRIMARY KEY,
-  message_id      TEXT,
-  thread_id       TEXT,
-  user_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  user_email      TEXT,
-  rating          TEXT NOT NULL CHECK (rating IN ('positive', 'negative', 'thumbs_up', 'thumbs_down')),
-  reason          TEXT,
-  comment         TEXT,
-  message_snippet TEXT,
-  subject_id      TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Students who sign in through class_11_students / class_12_students have no auth.users row, so their id
--- cannot go in user_id (foreign key). It is stored here instead.
-ALTER TABLE public.message_feedback ADD COLUMN IF NOT EXISTS student_id TEXT;
-
--- 9. INDEXES FOR FEEDBACK -----------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_message_feedback_created ON public.message_feedback (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_message_feedback_msg     ON public.message_feedback (message_id);
-CREATE INDEX IF NOT EXISTS idx_message_feedback_user    ON public.message_feedback (user_id);
-
--- 10. ROW LEVEL SECURITY FOR FEEDBACK -----------------------------------------
-ALTER TABLE public.message_feedback ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "message_feedback: insert access" ON public.message_feedback;
-CREATE POLICY "message_feedback: insert access" ON public.message_feedback
-  FOR INSERT TO authenticated, anon
-  WITH CHECK (true);
-
-DROP POLICY IF EXISTS "message_feedback: owner select" ON public.message_feedback;
-CREATE POLICY "message_feedback: owner select" ON public.message_feedback
-  FOR SELECT TO authenticated
-  USING (user_id = (SELECT auth.uid()));
+-- 8. FEEDBACK lives in supabase_feedback.sql (feedback_positive / feedback_negative).
+--    The old message_feedback table is no longer used; this file does not create it.
+--    Student search logging for class-table students: supabase_searches.sql.
 
 -- Permissions
 REVOKE ALL ON public.profiles, public.user_searches, public.threads, public.messages FROM anon;
-GRANT INSERT ON public.message_feedback TO anon;
+-- Class-table students (no Auth session) may add rows to the search log; see supabase_searches.sql.
+GRANT INSERT ON public.user_searches TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE
-  ON public.profiles, public.user_searches, public.threads, public.messages, public.message_feedback TO authenticated;
+  ON public.profiles, public.user_searches, public.threads, public.messages TO authenticated;
 
