@@ -33,6 +33,7 @@ import { mergeTranscripts, cleanDuplicatePhrases } from '@/lib/utils';
 import { useChat } from '@/hooks/useChat';
 import { SubjectSelect } from '../SubjectSelect';
 import { submitMessageFeedback, getSavedFeedbackRatings, saveFeedbackRating } from '@/lib/supabase';
+import { feedbackContext } from '@/lib/feedbackContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
@@ -462,9 +463,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
       userEmail: user.email,
       rating: 'positive',
       messageSnippet: message.content.slice(0, 300),
+      ...feedbackContext(messages, message.id),
+      studentClass: user.studentClass,
       subjectId,
     });
-  }, [feedbackRatings, activeThreadId, user.id, user.email, subjectId]);
+  }, [feedbackRatings, messages, activeThreadId, user.id, user.email, user.studentClass, subjectId]);
 
   const handleThumbsDownClick = useCallback((message: Message) => {
     if (feedbackRatings[message.id]) {
@@ -498,9 +501,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({ user, onSignOut, onUpdat
       reason: data.reason,
       comment: data.comment,
       messageSnippet: targetSnippet,
+      ...feedbackContext(messages, targetId),
+      studentClass: user.studentClass,
       subjectId,
     });
-  }, [feedbackModalTarget, activeThreadId, user.id, user.email, subjectId]);
+  }, [feedbackModalTarget, messages, activeThreadId, user.id, user.email, user.studentClass, subjectId]);
 
   const isCenteredStart = messages.length === 0 && !isVoiceActive;
 

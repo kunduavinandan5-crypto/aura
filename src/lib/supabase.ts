@@ -469,32 +469,47 @@ export async function submitMessageFeedback(feedback: MessageFeedback): Promise<
   if (!supabase) return true;
 
   try {
-    // user_id has a foreign key to auth.users, so it may only hold a real Supabase Auth id. Students who sign in
-    // through the class tables have no Auth account: their id goes in student_id (no foreign key) instead.
+    // Students who sign in through the class tables have no Supabase Auth account, so identify them by
+    // email / student_id (plain text, no foreign key). Positive and negative feedback live in separate tables.
     const { data: sessionData } = await supabase.auth.getSession();
     const authId = sessionData.session?.user.id ?? null;
     const isAuthUser = Boolean(authId && authId === feedback.userId);
+    const positive = feedback.rating === 'positive' || feedback.rating === 'thumbs_up';
 
-    const row = {
+    const base = {
       id,
-      message_id: feedback.messageId,
-      thread_id: feedback.threadId || null,
-      user_id: isAuthUser ? authId : null,
-      user_email: feedback.userEmail || null,
-      rating: feedback.rating,
-      reason: feedback.reason || null,
-      comment: feedback.comment || null,
-      message_snippet: feedback.messageSnippet ? feedback.messageSnippet.slice(0, 1000) : null,
-      subject_id: feedback.subjectId || null,
+      question: (feedback.question || feedback.messageSnippet || '').slice(0, 4000) || '(question not available)',
+      answer: feedback.answer ? feedback.answer.slice(0, 20000) : null,
+      subject: feedback.subjectId || null,
+      student_class: feedback.studentClass || null,
+      student_email: feedback.userEmail || null,
+      student_id: feedback.userId || null,
     };
-
-    let { error } = await supabase.from('message_feedback').insert({ ...row, student_id: isAuthUser ? null : feedback.userId || null });
-    // Database not migrated yet (no student_id column): still record the feedback without it.
-    if (error && /student_id|PGRST204/i.test(`${error.code ?? ''} ${error.message}`)) {
-      ({ error } = await supabase.from('message_feedback').insert(row));
-    }
+    const { error } = positive
+      ? await supabase.from('feedback_positive').insert(base)
+      : await supabase
+          .from('feedback_negative')
+          .insert({ ...base, reason: feedback.reason || null, comment: feedback.comment ? feedback.comment.slice(0, 2000) : null });
 
     if (error) {
+      // supabase_feedback.sql not run yet (table missing): keep recording in the old table so nothing is lost.
+      if (/PGRST205|42P01|schema cache|does not exist/i.test(`${error.code ?? ''} ${error.message}`)) {
+        const legacy = await supabase.from('message_feedback').insert({
+          id,
+          message_id: feedback.messageId,
+          thread_id: feedback.threadId || null,
+          user_id: isAuthUser ? authId : null,
+          user_email: feedback.userEmail || null,
+          rating: feedback.rating,
+          reason: feedback.reason || null,
+          comment: feedback.comment || null,
+          message_snippet: base.question.slice(0, 1000),
+          subject_id: feedback.subjectId || null,
+        });
+        if (!legacy.error) return true;
+        console.warn('Supabase submitMessageFeedback (legacy) error:', legacy.error.code, legacy.error.message);
+        return false;
+      }
       console.warn('Supabase submitMessageFeedback error:', error.code, error.message);
       return false;
     }

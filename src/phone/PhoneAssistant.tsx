@@ -28,6 +28,7 @@ import { LiquidButton, GlassFilter } from '@/components/ui/liquid-glass-button';
 import { Message, UserProfile } from '@/types';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
 import { submitMessageFeedback, getSavedFeedbackRatings, saveFeedbackRating } from '@/lib/supabase';
+import { feedbackContext } from '@/lib/feedbackContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
@@ -263,9 +264,11 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       userEmail: user.email,
       rating: 'positive',
       messageSnippet: message.content.slice(0, 300),
+      ...feedbackContext(messages, message.id),
+      studentClass: user.studentClass,
       subjectId,
     });
-  }, [feedbackRatings, user.id, user.email, subjectId]);
+  }, [feedbackRatings, messages, user.id, user.email, user.studentClass, subjectId]);
 
   const handleThumbsDownClick = useCallback((message: Message) => {
     if (feedbackRatings[message.id]) {
@@ -298,9 +301,11 @@ export const PhoneAssistant: React.FC<PhoneAssistantProps> = ({
       reason: data.reason,
       comment: data.comment,
       messageSnippet: targetSnippet,
+      ...feedbackContext(messages, targetId),
+      studentClass: user.studentClass,
       subjectId,
     });
-  }, [feedbackModalTarget, user.id, user.email, subjectId]);
+  }, [feedbackModalTarget, messages, user.id, user.email, user.studentClass, subjectId]);
 
   const isCenteredStart = messages.length === 0 && !isVoiceActive;
 

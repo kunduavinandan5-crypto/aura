@@ -59,6 +59,10 @@ export interface MessageFeedback {
   comment?: string | null;
   messageSnippet?: string | null;
   subjectId?: string | null;
+  /** The student's question that produced the rated answer, and the answer itself. */
+  question?: string;
+  answer?: string;
+  studentClass?: string | null;
   createdAt?: string;
 }
 
