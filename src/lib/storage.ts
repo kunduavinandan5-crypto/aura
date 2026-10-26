@@ -108,7 +108,7 @@ export const storage = {
     syncUserProfile(user).catch(() => {});
   },
 
-  recordSearch(query: string, userId: string, category = 'General'): void {
+  recordSearch(query: string, userId: string, category = 'General', who: { email?: string; studentClass?: string } = {}): void {
     const text = query.trim();
     if (!text) return;
     const record: UserSearchRecord = {
@@ -119,7 +119,7 @@ export const storage = {
       createdAt: new Date().toISOString(),
     };
     write(SEARCHES_KEY, [record, ...this.getSearches()].slice(0, 50));
-    recordUserSearch(userId, text, category).catch(() => {});
+    recordUserSearch(userId, text, category, who).catch(() => {});
   },
 
   getSearches(): UserSearchRecord[] {

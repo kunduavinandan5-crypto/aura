@@ -135,7 +135,7 @@ export function useChat(user: UserProfile) {
         return null;
       }
 
-      storage.recordSearch(prompt, user.id, subject.label);
+      storage.recordSearch(prompt, user.id, subject.label, { email: user.email, studentClass: user.studentClass });
 
 
       const now = new Date().toISOString();

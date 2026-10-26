@@ -297,14 +297,33 @@ async function hasCloudSession(userId: string): Promise<boolean> {
 
 /* ─────────────────────────── Searches ─────────────────────────── */
 
-export async function recordUserSearch(userId: string, searchQuery: string, category = 'General'): Promise<boolean> {
-  if (!searchQuery.trim() || !(await hasCloudSession(userId))) return false;
-  const { error } = await supabase!.from('user_searches').insert({
+/**
+ * Logs a question. Works for class-table students too (they have no Supabase Auth session): see
+ * supabase_searches.sql, which lets them add rows. Until that SQL is run, only Auth users are recorded.
+ */
+export async function recordUserSearch(
+  userId: string,
+  searchQuery: string,
+  category = 'General',
+  who: { email?: string; studentClass?: string } = {}
+): Promise<boolean> {
+  if (!supabase || !userId || !searchQuery.trim()) return false;
+  const row = {
     id: newId('search'),
     user_id: userId,
     search_query: searchQuery.trim().slice(0, 2000),
     category: category.slice(0, 80),
+  };
+  let { error } = await supabase.from('user_searches').insert({
+    ...row,
+    student_email: who.email || null,
+    student_class: who.studentClass || null,
   });
+  // The student_email / student_class columns are added by supabase_searches.sql; retry without them if missing.
+  if (error && /student_email|student_class|PGRST204/i.test(`${error.code ?? ''} ${error.message}`)) {
+    ({ error } = await supabase.from('user_searches').insert(row));
+  }
+  if (error) console.warn('Supabase recordUserSearch error:', error.code, error.message);
   return !error;
 }
 
