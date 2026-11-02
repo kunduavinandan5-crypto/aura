@@ -163,6 +163,16 @@ export function useChat(user: UserProfile) {
       const abortController = new AbortController();
       abortControllersRef.current.set(targetId, abortController);
       setThreadGenerating(targetId, true);
+
+      // Build conversation history from existing thread messages (last 10, text-only)
+      // so the model can answer follow-up questions that reference earlier Q&A in this chat.
+      const existingMessages = threadsRef.current.find((t) => t.id === targetId)?.messages ?? [];
+      const conversationHistory = existingMessages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .filter((m) => !!m.content)
+        .slice(-10) // keep last 5 rounds (user + assistant pairs)
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
       try {
         const result = await generateAiResponse({
           prompt: text.trim(),
@@ -170,6 +180,7 @@ export function useChat(user: UserProfile) {
           studentClass: user.studentClass,
           subject,
           signal: abortController.signal,
+          history: conversationHistory.length > 0 ? conversationHistory : undefined,
         });
         const assistantMessage: Message = {
           id: assistantId,

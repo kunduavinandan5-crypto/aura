@@ -4,7 +4,13 @@
  *   question       the student's question
  *   student_class  "11" or "12" (plain string, no "Class", no number type); omitted if unknown
  *   subject        lowercase subject id, e.g. "accountancy"
+ *   history        recent turns from this chat thread (role + content pairs)
  */
+export interface HistoryTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface AskBody {
   question: string;
   subject: string;
@@ -12,6 +18,8 @@ export interface AskBody {
   /** Raw base64 JPEG/PNG WITHOUT the "data:image/...;base64," prefix. */
   image_base64?: string;
   image_media_type?: string;
+  /** Conversation history for follow-up context (last N turns). */
+  history?: HistoryTurn[];
 }
 
 /** "Class 12" / "12" / 12 -> "12"; "Class 11" -> "11"; anything else (unknown, other course) -> undefined. */
@@ -29,7 +37,8 @@ export function buildAskBody(
   question: string,
   studentClass: string | number | null | undefined,
   subjectId: string,
-  image?: { image_base64: string; image_media_type: string }
+  image?: { image_base64: string; image_media_type: string },
+  history?: HistoryTurn[]
 ): AskBody {
   const body: AskBody = { question, subject: normalizeSubject(subjectId) };
   const cls = normalizeClass(studentClass);
@@ -38,5 +47,6 @@ export function buildAskBody(
     body.image_base64 = image.image_base64;
     body.image_media_type = image.image_media_type;
   }
+  if (history && history.length > 0) body.history = history;
   return body;
 }

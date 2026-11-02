@@ -1,7 +1,7 @@
 import { RagSourceChunk } from '@/types';
 import { Subject } from './subjects';
 import { toRequestImage } from './attachments';
-import { buildAskBody } from './askBody';
+import { HistoryTurn, buildAskBody } from './askBody';
 
 /**
  * Chat goes through the deployed RAG backend (NEXT_PUBLIC_API_URL, no trailing slash).
@@ -191,8 +191,13 @@ export async function generateAiResponse(params: {
   signal?: AbortSignal;
   /** Attached photo (data URL). Sent to the backend with the typed text, which reads the photo. */
   images?: string[];
+  /**
+   * Previous messages in this thread (oldest first). The last N turns are forwarded
+   * to the backend so follow-up questions have context.
+   */
+  history?: HistoryTurn[];
 }): Promise<AiResult> {
-  const { studentClass, subject, signal, images } = params;
+  const { studentClass, subject, signal, images, history } = params;
   const prompt = params.prompt.trim(); // may be empty when a photo is attached
   if (signal?.aborted) {
     throw new DOMException('Aborted', 'AbortError');
@@ -205,11 +210,12 @@ export async function generateAiResponse(params: {
   }
 
   // subject = the dropdown selection (lowercased); class = the student's own class from their account ("Class 12" -> "12").
-  const body = buildAskBody(prompt, studentClass, subject.id, image);
+  const body = buildAskBody(prompt, studentClass, subject.id, image, history);
   const cls = body.student_class;
 
+  // Only cache standalone questions (no history / no image) — follow-ups are contextual and must not be reused.
   const cacheKey = answerCacheKey(subject.id, cls, prompt);
-  const cached = image ? null : readCachedAnswer(cacheKey); // photo questions are never cached
+  const cached = (image || (history && history.length > 0)) ? null : readCachedAnswer(cacheKey);
   if (cached) return cached;
 
   // Same-origin /api/rag proxy first (no CORS), then the direct URLs. They all reach the SAME backend, so
